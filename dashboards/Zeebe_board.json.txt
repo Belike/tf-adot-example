@@ -1,0 +1,1857 @@
+{
+    "widgets": [
+        {
+            "type": "text",
+            "x": 0,
+            "y": 0,
+            "width": 24,
+            "height": 1,
+            "properties": {
+                "markdown": "# Zeebe 8.8 — Cluster Dashboard\n*Verified against live Camunda 8.8 metric emission. Namespace=`camunda`, Service=`camunda-platform`. Per-partition widgets use SEARCH expressions.*"
+            }
+        },
+        {
+            "type": "text",
+            "x": 0,
+            "y": 1,
+            "width": 24,
+            "height": 1,
+            "properties": {
+                "markdown": "## General Overview"
+            }
+        },
+        {
+            "type": "metric",
+            "x": 0,
+            "y": 2,
+            "width": 4,
+            "height": 4,
+            "properties": {
+                "title": "Partition health (min across cluster)",
+                "view": "singleValue",
+                "metrics": [
+                    [ "ContainerInsights/Prometheus", "zeebe_health", "Namespace", "camunda", "Service", "camunda-platform", { "stat": "Minimum", "period": 60, "label": "Min health" } ]
+                ],
+                "region": "eu-west-1"
+            }
+        },
+        {
+            "type": "metric",
+            "x": 4,
+            "y": 2,
+            "width": 4,
+            "height": 4,
+            "properties": {
+                "title": "Banned instances",
+                "view": "singleValue",
+                "metrics": [
+                    [ "ContainerInsights/Prometheus", "zeebe_banned_instances", "Namespace", "camunda", "Service", "camunda-platform", { "stat": "Maximum", "period": 60, "label": "Banned" } ]
+                ],
+                "region": "eu-west-1"
+            }
+        },
+        {
+            "type": "metric",
+            "x": 8,
+            "y": 2,
+            "width": 4,
+            "height": 4,
+            "properties": {
+                "title": "Pending incidents",
+                "view": "singleValue",
+                "metrics": [
+                    [ "ContainerInsights/Prometheus", "zeebe_pending_incidents", "Namespace", "camunda", "Service", "camunda-platform", { "stat": "Maximum", "period": 60, "label": "Pending" } ]
+                ],
+                "region": "eu-west-1"
+            }
+        },
+        {
+            "type": "metric",
+            "x": 12,
+            "y": 2,
+            "width": 12,
+            "height": 4,
+            "properties": {
+                "title": "Raft role per partition (3=Leader, 1=Follower, 0=Inactive)",
+                "view": "timeSeries",
+                "stacked": false,
+                "metrics": [
+                    [ { "expression": "SEARCH('{ContainerInsights/Prometheus,Namespace,Service,partition} MetricName=\"atomix_role\" Namespace=\"camunda\" Service=\"camunda-platform\"', 'Maximum', 60)", "id": "e1" } ]
+                ],
+                "region": "eu-west-1",
+                "yAxis": {
+                    "left": {
+                        "min": 0,
+                        "max": 4
+                    }
+                }
+            }
+        },
+        {
+            "type": "metric",
+            "x": 0,
+            "y": 6,
+            "width": 8,
+            "height": 6,
+            "properties": {
+                "title": "Stream processor records / min (per partition)",
+                "view": "timeSeries",
+                "stacked": false,
+                "metrics": [
+                    [ { "expression": "RATE(SEARCH('{ContainerInsights/Prometheus,Namespace,Service,partition} MetricName=\"zeebe_stream_processor_records_total\" Namespace=\"camunda\" Service=\"camunda-platform\"', 'Sum', 60))*60", "id": "e2" } ]
+                ],
+                "region": "eu-west-1",
+                "yAxis": {
+                    "left": {
+                        "min": 0,
+                        "label": "records/min"
+                    }
+                }
+            }
+        },
+        {
+            "type": "metric",
+            "x": 8,
+            "y": 6,
+            "width": 8,
+            "height": 6,
+            "properties": {
+                "title": "Exported events / min (per partition)",
+                "view": "timeSeries",
+                "stacked": false,
+                "metrics": [
+                    [ { "expression": "RATE(SEARCH('{ContainerInsights/Prometheus,Namespace,Service,partition} MetricName=\"zeebe_exporter_events_total\" Namespace=\"camunda\" Service=\"camunda-platform\"', 'Sum', 60))*60", "id": "e3" } ]
+                ],
+                "region": "eu-west-1",
+                "yAxis": {
+                    "left": {
+                        "min": 0,
+                        "label": "events/min"
+                    }
+                }
+            }
+        },
+        {
+            "type": "metric",
+            "x": 16,
+            "y": 6,
+            "width": 8,
+            "height": 6,
+            "properties": {
+                "title": "Records appended / min (per partition)",
+                "view": "timeSeries",
+                "stacked": false,
+                "metrics": [
+                    [ { "expression": "RATE(SEARCH('{ContainerInsights/Prometheus,Namespace,Service,partition} MetricName=\"zeebe_log_appender_record_appended_total\" Namespace=\"camunda\" Service=\"camunda-platform\"', 'Sum', 60))*60", "id": "e4" } ]
+                ],
+                "region": "eu-west-1",
+                "yAxis": {
+                    "left": {
+                        "min": 0,
+                        "label": "records/min"
+                    }
+                }
+            }
+        },
+        {
+            "type": "text",
+            "x": 0,
+            "y": 12,
+            "width": 24,
+            "height": 1,
+            "properties": {
+                "markdown": "## Backpressure & Flow Control\n*Backpressure is healthy when inflight < limit and drops stay at zero. Dropped requests only appear under sustained overload.*"
+            }
+        },
+        {
+            "type": "metric",
+            "x": 0,
+            "y": 13,
+            "width": 12,
+            "height": 6,
+            "properties": {
+                "title": "Inflight requests vs limit (per partition)",
+                "view": "timeSeries",
+                "stacked": false,
+                "metrics": [
+                    [ { "expression": "SEARCH('{ContainerInsights/Prometheus,Namespace,Service,partition} MetricName=\"zeebe_backpressure_inflight_requests_count\" Namespace=\"camunda\" Service=\"camunda-platform\"', 'Maximum', 60)", "id": "e5" } ],
+                    [ { "expression": "SEARCH('{ContainerInsights/Prometheus,Namespace,Service,partition} MetricName=\"zeebe_backpressure_requests_limit\" Namespace=\"camunda\" Service=\"camunda-platform\"', 'Minimum', 60)", "id": "e6" } ]
+                ],
+                "region": "eu-west-1",
+                "yAxis": {
+                    "left": {
+                        "min": 0,
+                        "label": "requests"
+                    }
+                }
+            }
+        },
+        {
+            "type": "metric",
+            "x": 12,
+            "y": 13,
+            "width": 12,
+            "height": 6,
+            "properties": {
+                "title": "Backpressure headroom (limit - inflight, per partition)",
+                "view": "timeSeries",
+                "stacked": false,
+                "metrics": [
+                    [ { "expression": "SEARCH('{ContainerInsights/Prometheus,Namespace,Service,partition} MetricName=\"zeebe_backpressure_requests_limit\" Namespace=\"camunda\" Service=\"camunda-platform\"', 'Minimum', 60)", "id": "e7" } ]
+                ],
+                "region": "eu-west-1",
+                "yAxis": {
+                    "left": {
+                        "min": 0,
+                        "label": "available slots"
+                    }
+                },
+                "annotations": {
+                    "horizontal": [
+                        {
+                            "label": "Healthy threshold",
+                            "value": 10,
+                            "color": "#2ca02c"
+                        }
+                    ]
+                }
+            }
+        },
+        {
+            "type": "metric",
+            "x": 0,
+            "y": 19,
+            "width": 8,
+            "height": 6,
+            "properties": {
+                "title": "Received requests / min (per partition)",
+                "view": "timeSeries",
+                "stacked": false,
+                "metrics": [
+                    [ { "expression": "RATE(SEARCH('{ContainerInsights/Prometheus,Namespace,Service,partition} MetricName=\"zeebe_received_request_count_total\" Namespace=\"camunda\" Service=\"camunda-platform\"', 'Sum', 60))*60", "id": "e8" } ]
+                ],
+                "region": "eu-west-1",
+                "yAxis": {
+                    "left": {
+                        "min": 0,
+                        "label": "requests/min"
+                    }
+                }
+            }
+        },
+        {
+            "type": "metric",
+            "x": 8,
+            "y": 19,
+            "width": 8,
+            "height": 6,
+            "properties": {
+                "title": "Dropped requests / min (per partition)",
+                "view": "timeSeries",
+                "stacked": false,
+                "metrics": [
+                    [ { "expression": "RATE(SEARCH('{ContainerInsights/Prometheus,Namespace,Service,partition} MetricName=\"zeebe_dropped_request_count_total\" Namespace=\"camunda\" Service=\"camunda-platform\"', 'Sum', 60))*60", "id": "e9" } ]
+                ],
+                "region": "eu-west-1",
+                "yAxis": {
+                    "left": {
+                        "min": 0,
+                        "label": "drops/min"
+                    }
+                },
+                "annotations": {
+                    "horizontal": [
+                        {
+                            "label": "Any drop = backpressure active",
+                            "value": 1,
+                            "color": "#d62728"
+                        }
+                    ]
+                }
+            }
+        },
+        {
+            "type": "metric",
+            "x": 16,
+            "y": 19,
+            "width": 8,
+            "height": 6,
+            "properties": {
+                "title": "Drop ratio — cluster (dropped / received × 100)",
+                "view": "timeSeries",
+                "stacked": false,
+                "metrics": [
+                    [ { "expression": "IF(m2>0, (m1/m2)*100, 0)", "label": "Drop %", "id": "e998" } ],
+                    [ "ContainerInsights/Prometheus", "zeebe_dropped_request_count_total", "Namespace", "camunda", "Service", "camunda-platform", { "id": "m1", "stat": "Sum", "period": 60, "visible": false } ],
+                    [ "ContainerInsights/Prometheus", "zeebe_received_request_count_total", "Namespace", "camunda", "Service", "camunda-platform", { "id": "m2", "stat": "Sum", "period": 60, "visible": false } ]
+                ],
+                "region": "eu-west-1",
+                "yAxis": {
+                    "left": {
+                        "min": 0,
+                        "max": 50,
+                        "label": "%"
+                    }
+                },
+                "annotations": {
+                    "horizontal": [
+                        {
+                            "label": "Benchmark target (~10%)",
+                            "value": 10,
+                            "color": "#ff7f0e"
+                        },
+                        {
+                            "label": "Production target (<0.5%)",
+                            "value": 0.5,
+                            "color": "#2ca02c"
+                        }
+                    ]
+                }
+            }
+        },
+        {
+            "type": "metric",
+            "x": 0,
+            "y": 25,
+            "width": 8,
+            "height": 6,
+            "properties": {
+                "title": "Inflight appends (per partition)",
+                "view": "timeSeries",
+                "stacked": false,
+                "metrics": [
+                    [ { "expression": "SEARCH('{ContainerInsights/Prometheus,Namespace,Service,partition} MetricName=\"zeebe_backpressure_inflight_append_count\" Namespace=\"camunda\" Service=\"camunda-platform\"', 'Maximum', 60)", "id": "e10" } ]
+                ],
+                "region": "eu-west-1",
+                "yAxis": {
+                    "left": {
+                        "min": 0
+                    }
+                }
+            }
+        },
+        {
+            "type": "metric",
+            "x": 8,
+            "y": 25,
+            "width": 8,
+            "height": 6,
+            "properties": {
+                "title": "Deferred appends / min (backpressure-induced, per partition)",
+                "view": "timeSeries",
+                "stacked": false,
+                "metrics": [
+                    [ { "expression": "RATE(SEARCH('{ContainerInsights/Prometheus,Namespace,Service,partition} MetricName=\"zeebe_deferred_append_count_total\" Namespace=\"camunda\" Service=\"camunda-platform\"', 'Sum', 60))*60", "id": "e11" } ]
+                ],
+                "region": "eu-west-1",
+                "yAxis": {
+                    "left": {
+                        "min": 0,
+                        "label": "deferred/min"
+                    }
+                },
+                "annotations": {
+                    "horizontal": [
+                        {
+                            "label": "Any deferral = write-side backpressure",
+                            "value": 1,
+                            "color": "#d62728"
+                        }
+                    ]
+                }
+            }
+        },
+        {
+            "type": "metric",
+            "x": 16,
+            "y": 25,
+            "width": 8,
+            "height": 6,
+            "properties": {
+                "title": "Flow control events / min (per partition)",
+                "view": "timeSeries",
+                "stacked": false,
+                "metrics": [
+                    [ { "expression": "RATE(SEARCH('{ContainerInsights/Prometheus,Namespace,Service,partition} MetricName=\"zeebe_flow_control_total\" Namespace=\"camunda\" Service=\"camunda-platform\"', 'Sum', 60))*60", "id": "e12" } ]
+                ],
+                "region": "eu-west-1",
+                "yAxis": {
+                    "left": {
+                        "min": 0
+                    }
+                }
+            }
+        },
+        {
+            "type": "metric",
+            "x": 0,
+            "y": 31,
+            "width": 8,
+            "height": 6,
+            "properties": {
+                "title": "Write rate — current (per partition)",
+                "view": "timeSeries",
+                "stacked": false,
+                "metrics": [
+                    [ { "expression": "SEARCH('{ContainerInsights/Prometheus,Namespace,Service,partition} MetricName=\"zeebe_flow_control_write_rate_maximum\" Namespace=\"camunda\" Service=\"camunda-platform\"', 'Maximum', 60)", "id": "e13" } ]
+                ],
+                "region": "eu-west-1",
+                "yAxis": {
+                    "left": {
+                        "min": 0,
+                        "label": "bytes/sec"
+                    }
+                }
+            }
+        },
+        {
+            "type": "metric",
+            "x": 8,
+            "y": 31,
+            "width": 8,
+            "height": 6,
+            "properties": {
+                "title": "Write rate — limit (per partition)",
+                "view": "timeSeries",
+                "stacked": false,
+                "metrics": [
+                    [ { "expression": "SEARCH('{ContainerInsights/Prometheus,Namespace,Service,partition} MetricName=\"zeebe_flow_control_write_rate_limit\" Namespace=\"camunda\" Service=\"camunda-platform\"', 'Minimum', 60)", "id": "e14" } ]
+                ],
+                "region": "eu-west-1",
+                "yAxis": {
+                    "left": {
+                        "min": 0,
+                        "label": "bytes/sec"
+                    }
+                }
+            }
+        },
+        {
+            "type": "metric",
+            "x": 16,
+            "y": 31,
+            "width": 8,
+            "height": 6,
+            "properties": {
+                "title": "Partition load (0.0 idle → 1.0 saturated, per partition)",
+                "view": "timeSeries",
+                "stacked": false,
+                "metrics": [
+                    [ { "expression": "SEARCH('{ContainerInsights/Prometheus,Namespace,Service,partition} MetricName=\"zeebe_flow_control_partition_load\" Namespace=\"camunda\" Service=\"camunda-platform\"', 'Maximum', 60)", "id": "e15" } ]
+                ],
+                "region": "eu-west-1",
+                "yAxis": {
+                    "left": {
+                        "min": 0,
+                        "max": 1.1
+                    }
+                },
+                "annotations": {
+                    "horizontal": [
+                        {
+                            "label": "Saturation",
+                            "value": 1,
+                            "color": "#d62728"
+                        }
+                    ]
+                }
+            }
+        },
+        {
+            "type": "text",
+            "x": 0,
+            "y": 37,
+            "width": 24,
+            "height": 1,
+            "properties": {
+                "markdown": "## Processing — Positions, Queue & State"
+            }
+        },
+        {
+            "type": "metric",
+            "x": 0,
+            "y": 38,
+            "width": 8,
+            "height": 5,
+            "properties": {
+                "title": "Last appended position (per partition)",
+                "view": "timeSeries",
+                "stacked": false,
+                "metrics": [
+                    [ { "expression": "SEARCH('{ContainerInsights/Prometheus,Namespace,Service,partition} MetricName=\"zeebe_log_appender_last_appended_position\" Namespace=\"camunda\" Service=\"camunda-platform\"', 'Maximum', 60)", "id": "e16" } ]
+                ],
+                "region": "eu-west-1",
+                "yAxis": {
+                    "left": {
+                        "min": 0,
+                        "label": "position"
+                    }
+                }
+            }
+        },
+        {
+            "type": "metric",
+            "x": 8,
+            "y": 38,
+            "width": 8,
+            "height": 5,
+            "properties": {
+                "title": "Last committed position (per partition)",
+                "view": "timeSeries",
+                "stacked": false,
+                "metrics": [
+                    [ { "expression": "SEARCH('{ContainerInsights/Prometheus,Namespace,Service,partition} MetricName=\"zeebe_log_appender_last_committed_position\" Namespace=\"camunda\" Service=\"camunda-platform\"', 'Maximum', 60)", "id": "e17" } ]
+                ],
+                "region": "eu-west-1",
+                "yAxis": {
+                    "left": {
+                        "min": 0,
+                        "label": "position"
+                    }
+                }
+            }
+        },
+        {
+            "type": "metric",
+            "x": 16,
+            "y": 38,
+            "width": 8,
+            "height": 5,
+            "properties": {
+                "title": "Last processed position (per partition)",
+                "view": "timeSeries",
+                "stacked": false,
+                "metrics": [
+                    [ { "expression": "SEARCH('{ContainerInsights/Prometheus,Namespace,Service,partition} MetricName=\"zeebe_stream_processor_last_processed_position\" Namespace=\"camunda\" Service=\"camunda-platform\"', 'Maximum', 60)", "id": "e18" } ]
+                ],
+                "region": "eu-west-1",
+                "yAxis": {
+                    "left": {
+                        "min": 0,
+                        "label": "position"
+                    }
+                }
+            }
+        },
+        {
+            "type": "metric",
+            "x": 0,
+            "y": 43,
+            "width": 8,
+            "height": 5,
+            "properties": {
+                "title": "Last exported position (per partition)",
+                "view": "timeSeries",
+                "stacked": false,
+                "metrics": [
+                    [ { "expression": "SEARCH('{ContainerInsights/Prometheus,Namespace,Service,partition} MetricName=\"zeebe_exporter_last_exported_position\" Namespace=\"camunda\" Service=\"camunda-platform\"', 'Maximum', 60)", "id": "e19" } ]
+                ],
+                "region": "eu-west-1",
+                "yAxis": {
+                    "left": {
+                        "min": 0,
+                        "label": "position"
+                    }
+                }
+            }
+        },
+        {
+            "type": "metric",
+            "x": 8,
+            "y": 43,
+            "width": 8,
+            "height": 5,
+            "properties": {
+                "title": "Stream processor state (per partition)",
+                "view": "timeSeries",
+                "stacked": false,
+                "metrics": [
+                    [ { "expression": "SEARCH('{ContainerInsights/Prometheus,Namespace,Service,partition} MetricName=\"zeebe_stream_processor_state\" Namespace=\"camunda\" Service=\"camunda-platform\"', 'Maximum', 60)", "id": "e20" } ]
+                ],
+                "region": "eu-west-1",
+                "yAxis": {
+                    "left": {
+                        "min": 0
+                    }
+                }
+            }
+        },
+        {
+            "type": "metric",
+            "x": 16,
+            "y": 43,
+            "width": 8,
+            "height": 5,
+            "properties": {
+                "title": "Scheduled command cache size (per partition)",
+                "view": "timeSeries",
+                "stacked": false,
+                "metrics": [
+                    [ { "expression": "SEARCH('{ContainerInsights/Prometheus,Namespace,Service,partition} MetricName=\"zeebe_stream_processor_scheduled_command_cache_size\" Namespace=\"camunda\" Service=\"camunda-platform\"', 'Maximum', 60)", "id": "e21" } ]
+                ],
+                "region": "eu-west-1",
+                "yAxis": {
+                    "left": {
+                        "min": 0
+                    }
+                }
+            }
+        },
+        {
+            "type": "metric",
+            "x": 0,
+            "y": 48,
+            "width": 8,
+            "height": 5,
+            "properties": {
+                "title": "Stream processor latency max (seconds, per partition)",
+                "view": "timeSeries",
+                "stacked": false,
+                "metrics": [
+                    [ { "expression": "SEARCH('{ContainerInsights/Prometheus,Namespace,Service,partition} MetricName=\"zeebe_stream_processor_latency_seconds_max\" Namespace=\"camunda\" Service=\"camunda-platform\"', 'Maximum', 60)", "id": "e22" } ]
+                ],
+                "region": "eu-west-1",
+                "yAxis": {
+                    "left": {
+                        "min": 0,
+                        "label": "seconds"
+                    }
+                }
+            }
+        },
+        {
+            "type": "metric",
+            "x": 8,
+            "y": 48,
+            "width": 8,
+            "height": 5,
+            "properties": {
+                "title": "Stream processor processing duration max (per partition)",
+                "view": "timeSeries",
+                "stacked": false,
+                "metrics": [
+                    [ { "expression": "SEARCH('{ContainerInsights/Prometheus,Namespace,Service,partition} MetricName=\"zeebe_stream_processor_processing_duration_seconds_max\" Namespace=\"camunda\" Service=\"camunda-platform\"', 'Maximum', 60)", "id": "e23" } ]
+                ],
+                "region": "eu-west-1",
+                "yAxis": {
+                    "left": {
+                        "min": 0,
+                        "label": "seconds"
+                    }
+                }
+            }
+        },
+        {
+            "type": "metric",
+            "x": 16,
+            "y": 48,
+            "width": 8,
+            "height": 5,
+            "properties": {
+                "title": "Error handling phase (per partition)",
+                "view": "timeSeries",
+                "stacked": false,
+                "metrics": [
+                    [ { "expression": "SEARCH('{ContainerInsights/Prometheus,Namespace,Service,partition} MetricName=\"zeebe_stream_processor_error_handling_phase\" Namespace=\"camunda\" Service=\"camunda-platform\"', 'Maximum', 60)", "id": "e24" } ]
+                ],
+                "region": "eu-west-1",
+                "yAxis": {
+                    "left": {
+                        "min": 0
+                    }
+                }
+            }
+        },
+        {
+            "type": "text",
+            "x": 0,
+            "y": 53,
+            "width": 24,
+            "height": 1,
+            "properties": {
+                "markdown": "## Throughput"
+            }
+        },
+        {
+            "type": "metric",
+            "x": 0,
+            "y": 54,
+            "width": 8,
+            "height": 6,
+            "properties": {
+                "title": "Process-instance creations / min (per partition)",
+                "view": "timeSeries",
+                "stacked": false,
+                "metrics": [
+                    [ { "expression": "RATE(SEARCH('{ContainerInsights/Prometheus,Namespace,Service,partition} MetricName=\"zeebe_process_instance_creations_total\" Namespace=\"camunda\" Service=\"camunda-platform\"', 'Sum', 60))*60", "id": "e25" } ]
+                ],
+                "region": "eu-west-1",
+                "yAxis": {
+                    "left": {
+                        "min": 0,
+                        "label": "PI/min"
+                    }
+                }
+            }
+        },
+        {
+            "type": "metric",
+            "x": 8,
+            "y": 54,
+            "width": 8,
+            "height": 6,
+            "properties": {
+                "title": "Element-instance events / min (per partition)",
+                "view": "timeSeries",
+                "stacked": false,
+                "metrics": [
+                    [ { "expression": "RATE(SEARCH('{ContainerInsights/Prometheus,Namespace,Service,partition} MetricName=\"zeebe_element_instance_events_total\" Namespace=\"camunda\" Service=\"camunda-platform\"', 'Sum', 60))*60", "id": "e26" } ]
+                ],
+                "region": "eu-west-1",
+                "yAxis": {
+                    "left": {
+                        "min": 0,
+                        "label": "events/min"
+                    }
+                }
+            }
+        },
+        {
+            "type": "metric",
+            "x": 16,
+            "y": 54,
+            "width": 8,
+            "height": 6,
+            "properties": {
+                "title": "Job events / min (per partition)",
+                "view": "timeSeries",
+                "stacked": false,
+                "metrics": [
+                    [ { "expression": "RATE(SEARCH('{ContainerInsights/Prometheus,Namespace,Service,partition} MetricName=\"zeebe_job_events_total\" Namespace=\"camunda\" Service=\"camunda-platform\"', 'Sum', 60))*60", "id": "e27" } ]
+                ],
+                "region": "eu-west-1",
+                "yAxis": {
+                    "left": {
+                        "min": 0,
+                        "label": "events/min"
+                    }
+                }
+            }
+        },
+        {
+            "type": "metric",
+            "x": 0,
+            "y": 60,
+            "width": 8,
+            "height": 6,
+            "properties": {
+                "title": "Incident events / min (per partition)",
+                "view": "timeSeries",
+                "stacked": false,
+                "metrics": [
+                    [ { "expression": "RATE(SEARCH('{ContainerInsights/Prometheus,Namespace,Service,partition} MetricName=\"zeebe_incident_events_total\" Namespace=\"camunda\" Service=\"camunda-platform\"', 'Sum', 60))*60", "id": "e28" } ]
+                ],
+                "region": "eu-west-1",
+                "yAxis": {
+                    "left": {
+                        "min": 0,
+                        "label": "incidents/min"
+                    }
+                },
+                "annotations": {
+                    "horizontal": [
+                        {
+                            "label": "Any incident = process-design issue",
+                            "value": 1,
+                            "color": "#ff7f0e"
+                        }
+                    ]
+                }
+            }
+        },
+        {
+            "type": "metric",
+            "x": 8,
+            "y": 60,
+            "width": 8,
+            "height": 6,
+            "properties": {
+                "title": "Replay events / min (per partition)",
+                "view": "timeSeries",
+                "stacked": false,
+                "metrics": [
+                    [ { "expression": "RATE(SEARCH('{ContainerInsights/Prometheus,Namespace,Service,partition} MetricName=\"zeebe_replay_events_total\" Namespace=\"camunda\" Service=\"camunda-platform\"', 'Sum', 60))*60", "id": "e29" } ]
+                ],
+                "region": "eu-west-1",
+                "yAxis": {
+                    "left": {
+                        "min": 0,
+                        "label": "events/min"
+                    }
+                }
+            }
+        },
+        {
+            "type": "metric",
+            "x": 16,
+            "y": 60,
+            "width": 8,
+            "height": 6,
+            "properties": {
+                "title": "Process-instance execution time max (per partition)",
+                "view": "timeSeries",
+                "stacked": false,
+                "metrics": [
+                    [ { "expression": "SEARCH('{ContainerInsights/Prometheus,Namespace,Service,partition} MetricName=\"zeebe_process_instance_execution_time_seconds_max\" Namespace=\"camunda\" Service=\"camunda-platform\"', 'Maximum', 60)", "id": "e30" } ]
+                ],
+                "region": "eu-west-1",
+                "yAxis": {
+                    "left": {
+                        "min": 0,
+                        "label": "seconds"
+                    }
+                }
+            }
+        },
+        {
+            "type": "text",
+            "x": 0,
+            "y": 66,
+            "width": 24,
+            "height": 1,
+            "properties": {
+                "markdown": "## Log Appender — Latency & Commit Lag"
+            }
+        },
+        {
+            "type": "metric",
+            "x": 0,
+            "y": 67,
+            "width": 8,
+            "height": 6,
+            "properties": {
+                "title": "Append latency max seconds (per partition)",
+                "view": "timeSeries",
+                "stacked": false,
+                "metrics": [
+                    [ { "expression": "SEARCH('{ContainerInsights/Prometheus,Namespace,Service,partition} MetricName=\"zeebe_log_appender_append_latency_seconds_max\" Namespace=\"camunda\" Service=\"camunda-platform\"', 'Maximum', 60)", "id": "e31" } ]
+                ],
+                "region": "eu-west-1",
+                "yAxis": {
+                    "left": {
+                        "min": 0,
+                        "label": "seconds"
+                    }
+                }
+            }
+        },
+        {
+            "type": "metric",
+            "x": 8,
+            "y": 67,
+            "width": 8,
+            "height": 6,
+            "properties": {
+                "title": "Commit latency max seconds (per partition)",
+                "view": "timeSeries",
+                "stacked": false,
+                "metrics": [
+                    [ { "expression": "SEARCH('{ContainerInsights/Prometheus,Namespace,Service,partition} MetricName=\"zeebe_log_appender_commit_latency_seconds_max\" Namespace=\"camunda\" Service=\"camunda-platform\"', 'Maximum', 60)", "id": "e32" } ]
+                ],
+                "region": "eu-west-1",
+                "yAxis": {
+                    "left": {
+                        "min": 0,
+                        "label": "seconds"
+                    }
+                }
+            }
+        },
+        {
+            "type": "metric",
+            "x": 16,
+            "y": 67,
+            "width": 8,
+            "height": 6,
+            "properties": {
+                "title": "Commit lag (aggregate, appended - committed)",
+                "view": "timeSeries",
+                "stacked": false,
+                "metrics": [
+                    [ { "expression": "m1 - m2", "label": "Lag", "id": "e997", "color": "#d62728" } ],
+                    [ "ContainerInsights/Prometheus", "zeebe_log_appender_last_appended_position", "Namespace", "camunda", "Service", "camunda-platform", { "stat": "Maximum", "period": 60, "visible": false, "id": "m1" } ],
+                    [ "ContainerInsights/Prometheus", "zeebe_log_appender_last_committed_position", "Namespace", "camunda", "Service", "camunda-platform", { "stat": "Maximum", "period": 60, "visible": false, "id": "m2" } ]
+                ],
+                "region": "eu-west-1",
+                "yAxis": {
+                    "left": {
+                        "min": 0,
+                        "label": "positions"
+                    }
+                }
+            }
+        },
+        {
+            "type": "text",
+            "x": 0,
+            "y": 73,
+            "width": 24,
+            "height": 1,
+            "properties": {
+                "markdown": "## Snapshots"
+            }
+        },
+        {
+            "type": "metric",
+            "x": 0,
+            "y": 74,
+            "width": 6,
+            "height": 6,
+            "properties": {
+                "title": "Snapshot rate / hour (per partition)",
+                "view": "timeSeries",
+                "stacked": false,
+                "metrics": [
+                    [ { "expression": "RATE(SEARCH('{ContainerInsights/Prometheus,Namespace,Service,partition} MetricName=\"zeebe_snapshot_count_total\" Namespace=\"camunda\" Service=\"camunda-platform\"', 'Sum', 3600))*3600", "id": "e33" } ]
+                ],
+                "region": "eu-west-1",
+                "yAxis": {
+                    "left": {
+                        "min": 0,
+                        "label": "snapshots/hour"
+                    }
+                }
+            }
+        },
+        {
+            "type": "metric",
+            "x": 6,
+            "y": 74,
+            "width": 6,
+            "height": 6,
+            "properties": {
+                "title": "Snapshot duration max (per partition)",
+                "view": "timeSeries",
+                "stacked": false,
+                "metrics": [
+                    [ { "expression": "SEARCH('{ContainerInsights/Prometheus,Namespace,Service,partition} MetricName=\"zeebe_snapshot_duration_seconds_max\" Namespace=\"camunda\" Service=\"camunda-platform\"', 'Maximum', 60)", "id": "e34" } ]
+                ],
+                "region": "eu-west-1",
+                "yAxis": {
+                    "left": {
+                        "min": 0,
+                        "label": "seconds"
+                    }
+                }
+            }
+        },
+        {
+            "type": "metric",
+            "x": 12,
+            "y": 74,
+            "width": 6,
+            "height": 6,
+            "properties": {
+                "title": "Snapshot size bytes (per partition)",
+                "view": "timeSeries",
+                "stacked": false,
+                "metrics": [
+                    [ { "expression": "SEARCH('{ContainerInsights/Prometheus,Namespace,Service,partition} MetricName=\"zeebe_snapshot_size_bytes\" Namespace=\"camunda\" Service=\"camunda-platform\"', 'Maximum', 60)", "id": "e35" } ]
+                ],
+                "region": "eu-west-1",
+                "yAxis": {
+                    "left": {
+                        "min": 0,
+                        "label": "bytes"
+                    }
+                }
+            }
+        },
+        {
+            "type": "metric",
+            "x": 18,
+            "y": 74,
+            "width": 6,
+            "height": 6,
+            "properties": {
+                "title": "Snapshot chunks count (per partition)",
+                "view": "timeSeries",
+                "stacked": false,
+                "metrics": [
+                    [ { "expression": "SEARCH('{ContainerInsights/Prometheus,Namespace,Service,partition} MetricName=\"zeebe_snapshot_chunks_count\" Namespace=\"camunda\" Service=\"camunda-platform\"', 'Maximum', 60)", "id": "e36" } ]
+                ],
+                "region": "eu-west-1",
+                "yAxis": {
+                    "left": {
+                        "min": 0
+                    }
+                }
+            }
+        },
+        {
+            "type": "text",
+            "x": 0,
+            "y": 80,
+            "width": 24,
+            "height": 1,
+            "properties": {
+                "markdown": "## Raft / Atomix"
+            }
+        },
+        {
+            "type": "metric",
+            "x": 0,
+            "y": 81,
+            "width": 8,
+            "height": 6,
+            "properties": {
+                "title": "Append entries rate / min (per partition)",
+                "view": "timeSeries",
+                "stacked": false,
+                "metrics": [
+                    [ { "expression": "RATE(SEARCH('{ContainerInsights/Prometheus,Namespace,Service,partition} MetricName=\"atomix_append_entries_rate_total\" Namespace=\"camunda\" Service=\"camunda-platform\"', 'Sum', 60))*60", "id": "e37" } ]
+                ],
+                "region": "eu-west-1",
+                "yAxis": {
+                    "left": {
+                        "min": 0
+                    }
+                }
+            }
+        },
+        {
+            "type": "metric",
+            "x": 8,
+            "y": 81,
+            "width": 8,
+            "height": 6,
+            "properties": {
+                "title": "Append data bytes / min (per partition)",
+                "view": "timeSeries",
+                "stacked": false,
+                "metrics": [
+                    [ { "expression": "RATE(SEARCH('{ContainerInsights/Prometheus,Namespace,Service,partition} MetricName=\"atomix_append_entries_data_rate_total\" Namespace=\"camunda\" Service=\"camunda-platform\"', 'Sum', 60))*60", "id": "e38" } ]
+                ],
+                "region": "eu-west-1",
+                "yAxis": {
+                    "left": {
+                        "min": 0,
+                        "label": "bytes/min"
+                    }
+                }
+            }
+        },
+        {
+            "type": "metric",
+            "x": 16,
+            "y": 81,
+            "width": 8,
+            "height": 6,
+            "properties": {
+                "title": "Snapshot replications / min (per partition)",
+                "view": "timeSeries",
+                "stacked": false,
+                "metrics": [
+                    [ { "expression": "RATE(SEARCH('{ContainerInsights/Prometheus,Namespace,Service,partition} MetricName=\"atomix_snapshot_replication_count\" Namespace=\"camunda\" Service=\"camunda-platform\"', 'Sum', 60))*60", "id": "e39" } ]
+                ],
+                "region": "eu-west-1",
+                "yAxis": {
+                    "left": {
+                        "min": 0
+                    }
+                }
+            }
+        },
+        {
+            "type": "metric",
+            "x": 0,
+            "y": 87,
+            "width": 8,
+            "height": 6,
+            "properties": {
+                "title": "Log segment count (per partition)",
+                "view": "timeSeries",
+                "stacked": false,
+                "metrics": [
+                    [ { "expression": "SEARCH('{ContainerInsights/Prometheus,Namespace,Service,partition} MetricName=\"atomix_segment_count\" Namespace=\"camunda\" Service=\"camunda-platform\"', 'Maximum', 60)", "id": "e40" } ]
+                ],
+                "region": "eu-west-1",
+                "yAxis": {
+                    "left": {
+                        "min": 0
+                    }
+                }
+            }
+        },
+        {
+            "type": "metric",
+            "x": 8,
+            "y": 87,
+            "width": 8,
+            "height": 6,
+            "properties": {
+                "title": "Journal append rate / min (per partition)",
+                "view": "timeSeries",
+                "stacked": false,
+                "metrics": [
+                    [ { "expression": "RATE(SEARCH('{ContainerInsights/Prometheus,Namespace,Service,partition} MetricName=\"atomix_journal_append_rate_total\" Namespace=\"camunda\" Service=\"camunda-platform\"', 'Sum', 60))*60", "id": "e41" } ]
+                ],
+                "region": "eu-west-1",
+                "yAxis": {
+                    "left": {
+                        "min": 0
+                    }
+                }
+            }
+        },
+        {
+            "type": "metric",
+            "x": 16,
+            "y": 87,
+            "width": 8,
+            "height": 6,
+            "properties": {
+                "title": "Journal append bytes / min (per partition)",
+                "view": "timeSeries",
+                "stacked": false,
+                "metrics": [
+                    [ { "expression": "RATE(SEARCH('{ContainerInsights/Prometheus,Namespace,Service,partition} MetricName=\"atomix_journal_append_data_rate_total\" Namespace=\"camunda\" Service=\"camunda-platform\"', 'Sum', 60))*60", "id": "e42" } ]
+                ],
+                "region": "eu-west-1",
+                "yAxis": {
+                    "left": {
+                        "min": 0,
+                        "label": "bytes/min"
+                    }
+                }
+            }
+        },
+        {
+            "type": "text",
+            "x": 0,
+            "y": 93,
+            "width": 24,
+            "height": 1,
+            "properties": {
+                "markdown": "## Exporter — Elasticsearch"
+            }
+        },
+        {
+            "type": "metric",
+            "x": 0,
+            "y": 94,
+            "width": 8,
+            "height": 6,
+            "properties": {
+                "title": "ES exporter flush duration max (per partition)",
+                "view": "timeSeries",
+                "stacked": false,
+                "metrics": [
+                    [ { "expression": "SEARCH('{ContainerInsights/Prometheus,Namespace,Service,partition} MetricName=\"zeebe_elasticsearch_exporter_flush_duration_seconds_max\" Namespace=\"camunda\" Service=\"camunda-platform\"', 'Maximum', 60)", "id": "e43" } ]
+                ],
+                "region": "eu-west-1",
+                "yAxis": {
+                    "left": {
+                        "min": 0,
+                        "label": "seconds"
+                    }
+                }
+            }
+        },
+        {
+            "type": "metric",
+            "x": 8,
+            "y": 94,
+            "width": 8,
+            "height": 6,
+            "properties": {
+                "title": "ES exporter failed flushes / min (per partition)",
+                "view": "timeSeries",
+                "stacked": false,
+                "metrics": [
+                    [ { "expression": "RATE(SEARCH('{ContainerInsights/Prometheus,Namespace,Service,partition} MetricName=\"zeebe_elasticsearch_exporter_failed_flush_total\" Namespace=\"camunda\" Service=\"camunda-platform\"', 'Sum', 60))*60", "id": "e44" } ]
+                ],
+                "region": "eu-west-1",
+                "yAxis": {
+                    "left": {
+                        "min": 0,
+                        "label": "failures/min"
+                    }
+                },
+                "annotations": {
+                    "horizontal": [
+                        {
+                            "label": "Any failed flush = ES unhealthy",
+                            "value": 1,
+                            "color": "#d62728"
+                        }
+                    ]
+                }
+            }
+        },
+        {
+            "type": "metric",
+            "x": 16,
+            "y": 94,
+            "width": 8,
+            "height": 6,
+            "properties": {
+                "title": "ES exporter bulk memory (per partition)",
+                "view": "timeSeries",
+                "stacked": false,
+                "metrics": [
+                    [ { "expression": "SEARCH('{ContainerInsights/Prometheus,Namespace,Service,partition} MetricName=\"zeebe_elasticsearch_exporter_bulk_memory_size\" Namespace=\"camunda\" Service=\"camunda-platform\"', 'Maximum', 60)", "id": "e45" } ]
+                ],
+                "region": "eu-west-1",
+                "yAxis": {
+                    "left": {
+                        "min": 0,
+                        "label": "bytes"
+                    }
+                }
+            }
+        },
+        {
+            "type": "text",
+            "x": 0,
+            "y": 100,
+            "width": 24,
+            "height": 1,
+            "properties": {
+                "markdown": "## Exporter — Camunda"
+            }
+        },
+        {
+            "type": "metric",
+            "x": 0,
+            "y": 101,
+            "width": 8,
+            "height": 6,
+            "properties": {
+                "title": "Camunda exporter flush duration max (per partition)",
+                "view": "timeSeries",
+                "stacked": false,
+                "metrics": [
+                    [ { "expression": "SEARCH('{ContainerInsights/Prometheus,Namespace,Service,partition} MetricName=\"zeebe_camunda_exporter_flush_duration_seconds_max\" Namespace=\"camunda\" Service=\"camunda-platform\"', 'Maximum', 60)", "id": "e46" } ]
+                ],
+                "region": "eu-west-1",
+                "yAxis": {
+                    "left": {
+                        "min": 0,
+                        "label": "seconds"
+                    }
+                }
+            }
+        },
+        {
+            "type": "metric",
+            "x": 8,
+            "y": 101,
+            "width": 8,
+            "height": 6,
+            "properties": {
+                "title": "Camunda exporter failed flushes / min (per partition)",
+                "view": "timeSeries",
+                "stacked": false,
+                "metrics": [
+                    [ { "expression": "RATE(SEARCH('{ContainerInsights/Prometheus,Namespace,Service,partition} MetricName=\"zeebe_camunda_exporter_failed_flush_total\" Namespace=\"camunda\" Service=\"camunda-platform\"', 'Sum', 60))*60", "id": "e47" } ]
+                ],
+                "region": "eu-west-1",
+                "yAxis": {
+                    "left": {
+                        "min": 0,
+                        "label": "failures/min"
+                    }
+                },
+                "annotations": {
+                    "horizontal": [
+                        {
+                            "label": "Any failed flush",
+                            "value": 1,
+                            "color": "#d62728"
+                        }
+                    ]
+                }
+            }
+        },
+        {
+            "type": "metric",
+            "x": 16,
+            "y": 101,
+            "width": 8,
+            "height": 6,
+            "properties": {
+                "title": "Seconds since last flush (per partition)",
+                "view": "timeSeries",
+                "stacked": false,
+                "metrics": [
+                    [ { "expression": "SEARCH('{ContainerInsights/Prometheus,Namespace,Service,partition} MetricName=\"zeebe_camunda_exporter_since_last_flush_seconds\" Namespace=\"camunda\" Service=\"camunda-platform\"', 'Maximum', 60)", "id": "e48" } ]
+                ],
+                "region": "eu-west-1",
+                "yAxis": {
+                    "left": {
+                        "min": 0,
+                        "label": "seconds"
+                    }
+                },
+                "annotations": {
+                    "horizontal": [
+                        {
+                            "label": "Staleness warning (>60s)",
+                            "value": 60,
+                            "color": "#ff7f0e"
+                        }
+                    ]
+                }
+            }
+        },
+        {
+            "type": "metric",
+            "x": 0,
+            "y": 107,
+            "width": 8,
+            "height": 6,
+            "properties": {
+                "title": "Camunda process instances awaiting archival (per partition)",
+                "view": "timeSeries",
+                "stacked": false,
+                "metrics": [
+                    [ { "expression": "SEARCH('{ContainerInsights/Prometheus,Namespace,Service,partition} MetricName=\"zeebe_camunda_exporter_process_instances_awaiting_archival\" Namespace=\"camunda\" Service=\"camunda-platform\"', 'Maximum', 60)", "id": "e49" } ]
+                ],
+                "region": "eu-west-1",
+                "yAxis": {
+                    "left": {
+                        "min": 0
+                    }
+                }
+            }
+        },
+        {
+            "type": "metric",
+            "x": 8,
+            "y": 107,
+            "width": 8,
+            "height": 6,
+            "properties": {
+                "title": "Camunda archiver — process instances archived / min",
+                "view": "timeSeries",
+                "stacked": false,
+                "metrics": [
+                    [ { "expression": "RATE(SEARCH('{ContainerInsights/Prometheus,Namespace,Service} MetricName=\"zeebe_camunda_exporter_archiver_process_instances_total\" Namespace=\"camunda\" Service=\"camunda-platform\"', 'Sum', 60))*60", "id": "e50", "label": "Archived/min" } ]
+                ],
+                "region": "eu-west-1",
+                "yAxis": {
+                    "left": {
+                        "min": 0
+                    }
+                }
+            }
+        },
+        {
+            "type": "metric",
+            "x": 16,
+            "y": 107,
+            "width": 8,
+            "height": 6,
+            "properties": {
+                "title": "Camunda exporter cache — process evictions / min",
+                "view": "timeSeries",
+                "stacked": false,
+                "metrics": [
+                    [ { "expression": "RATE(SEARCH('{ContainerInsights/Prometheus,Namespace,Service} MetricName=\"zeebe_camunda_exporter_cache_process_evictions_total\" Namespace=\"camunda\" Service=\"camunda-platform\"', 'Sum', 60))*60", "id": "e51", "label": "Evictions/min" } ]
+                ],
+                "region": "eu-west-1",
+                "yAxis": {
+                    "left": {
+                        "min": 0
+                    }
+                }
+            }
+        },
+        {
+            "type": "text",
+            "x": 0,
+            "y": 113,
+            "width": 24,
+            "height": 1,
+            "properties": {
+                "markdown": "## Gateway, gRPC & REST API"
+            }
+        },
+        {
+            "type": "metric",
+            "x": 0,
+            "y": 114,
+            "width": 8,
+            "height": 6,
+            "properties": {
+                "title": "Gateway total requests / min (cluster)",
+                "view": "timeSeries",
+                "stacked": false,
+                "metrics": [
+                    [ { "expression": "RATE(SEARCH('{ContainerInsights/Prometheus,Namespace,Service} MetricName=\"zeebe_gateway_total_requests_total\" Namespace=\"camunda\" Service=\"camunda-platform\"', 'Sum', 60))*60", "id": "e52", "label": "Total/min" } ]
+                ],
+                "region": "eu-west-1",
+                "yAxis": {
+                    "left": {
+                        "min": 0
+                    }
+                }
+            }
+        },
+        {
+            "type": "metric",
+            "x": 8,
+            "y": 114,
+            "width": 8,
+            "height": 6,
+            "properties": {
+                "title": "gRPC requests received / min (cluster)",
+                "view": "timeSeries",
+                "stacked": false,
+                "metrics": [
+                    [ { "expression": "RATE(SEARCH('{ContainerInsights/Prometheus,Namespace,Service} MetricName=\"grpc_server_requests_received_messages_total\" Namespace=\"camunda\" Service=\"camunda-platform\"', 'Sum', 60))*60", "id": "e53", "label": "Received/min" } ]
+                ],
+                "region": "eu-west-1",
+                "yAxis": {
+                    "left": {
+                        "min": 0
+                    }
+                }
+            }
+        },
+        {
+            "type": "metric",
+            "x": 16,
+            "y": 114,
+            "width": 8,
+            "height": 6,
+            "properties": {
+                "title": "gRPC responses sent / min (cluster)",
+                "view": "timeSeries",
+                "stacked": false,
+                "metrics": [
+                    [ { "expression": "RATE(SEARCH('{ContainerInsights/Prometheus,Namespace,Service} MetricName=\"grpc_server_responses_sent_messages_total\" Namespace=\"camunda\" Service=\"camunda-platform\"', 'Sum', 60))*60", "id": "e54", "label": "Sent/min" } ]
+                ],
+                "region": "eu-west-1",
+                "yAxis": {
+                    "left": {
+                        "min": 0
+                    }
+                }
+            }
+        },
+        {
+            "type": "metric",
+            "x": 0,
+            "y": 120,
+            "width": 8,
+            "height": 6,
+            "properties": {
+                "title": "Gateway request latency max (seconds)",
+                "view": "timeSeries",
+                "stacked": false,
+                "metrics": [
+                    [ "ContainerInsights/Prometheus", "zeebe_gateway_request_latency_seconds_max", "Namespace", "camunda", "Service", "camunda-platform", { "stat": "Maximum", "period": 60, "label": "Max" } ]
+                ],
+                "region": "eu-west-1",
+                "yAxis": {
+                    "left": {
+                        "min": 0,
+                        "label": "seconds"
+                    }
+                }
+            }
+        },
+        {
+            "type": "metric",
+            "x": 8,
+            "y": 120,
+            "width": 8,
+            "height": 6,
+            "properties": {
+                "title": "gRPC processing duration max (seconds)",
+                "view": "timeSeries",
+                "stacked": false,
+                "metrics": [
+                    [ "ContainerInsights/Prometheus", "grpc_server_processing_duration_seconds_max", "Namespace", "camunda", "Service", "camunda-platform", { "stat": "Maximum", "period": 60, "label": "Max" } ]
+                ],
+                "region": "eu-west-1",
+                "yAxis": {
+                    "left": {
+                        "min": 0,
+                        "label": "seconds"
+                    }
+                }
+            }
+        },
+        {
+            "type": "metric",
+            "x": 16,
+            "y": 120,
+            "width": 8,
+            "height": 6,
+            "properties": {
+                "title": "HTTP server request latency max (seconds)",
+                "view": "timeSeries",
+                "stacked": false,
+                "metrics": [
+                    [ "ContainerInsights/Prometheus", "http_server_requests_seconds_max", "Namespace", "camunda", "Service", "camunda-platform", { "stat": "Maximum", "period": 60, "label": "Max" } ]
+                ],
+                "region": "eu-west-1",
+                "yAxis": {
+                    "left": {
+                        "min": 0,
+                        "label": "seconds"
+                    }
+                }
+            }
+        },
+        {
+            "type": "metric",
+            "x": 0,
+            "y": 126,
+            "width": 12,
+            "height": 6,
+            "properties": {
+                "title": "Job stream: clients / servers / streams",
+                "view": "timeSeries",
+                "stacked": false,
+                "metrics": [
+                    [ "ContainerInsights/Prometheus", "zeebe_gateway_job_stream_clients", "Namespace", "camunda", "Service", "camunda-platform", { "stat": "Maximum", "period": 60, "label": "Clients" } ],
+                    [ "ContainerInsights/Prometheus", "zeebe_gateway_job_stream_servers", "Namespace", "camunda", "Service", "camunda-platform", { "stat": "Maximum", "period": 60, "label": "Servers" } ],
+                    [ "ContainerInsights/Prometheus", "zeebe_gateway_job_stream_streams", "Namespace", "camunda", "Service", "camunda-platform", { "stat": "Maximum", "period": 60, "label": "Streams" } ]
+                ],
+                "region": "eu-west-1",
+                "yAxis": {
+                    "left": {
+                        "min": 0
+                    }
+                }
+            }
+        },
+        {
+            "type": "metric",
+            "x": 12,
+            "y": 126,
+            "width": 12,
+            "height": 6,
+            "properties": {
+                "title": "Job stream pushes / min (cluster)",
+                "view": "timeSeries",
+                "stacked": false,
+                "metrics": [
+                    [ { "expression": "RATE(SEARCH('{ContainerInsights/Prometheus,Namespace,Service} MetricName=\"zeebe_gateway_job_stream_push_total\" Namespace=\"camunda\" Service=\"camunda-platform\"', 'Sum', 60))*60", "id": "e55", "label": "Pushes/min" } ]
+                ],
+                "region": "eu-west-1",
+                "yAxis": {
+                    "left": {
+                        "min": 0
+                    }
+                }
+            }
+        },
+        {
+            "type": "text",
+            "x": 0,
+            "y": 132,
+            "width": 24,
+            "height": 1,
+            "properties": {
+                "markdown": "## Memory & JVM (per Component)"
+            }
+        },
+        {
+            "type": "metric",
+            "x": 0,
+            "y": 133,
+            "width": 8,
+            "height": 6,
+            "properties": {
+                "title": "JVM heap used — per component",
+                "view": "timeSeries",
+                "stacked": false,
+                "metrics": [
+                    [ { "expression": "SEARCH('{ContainerInsights/Prometheus,Namespace,Component} MetricName=\"jvm_memory_used_bytes\" Namespace=\"camunda\"', 'Maximum', 60)", "id": "e56" } ]
+                ],
+                "region": "eu-west-1",
+                "yAxis": {
+                    "left": {
+                        "min": 0,
+                        "label": "bytes"
+                    }
+                }
+            }
+        },
+        {
+            "type": "metric",
+            "x": 8,
+            "y": 133,
+            "width": 8,
+            "height": 6,
+            "properties": {
+                "title": "JVM heap max — per component",
+                "view": "timeSeries",
+                "stacked": false,
+                "metrics": [
+                    [ { "expression": "SEARCH('{ContainerInsights/Prometheus,Namespace,Component} MetricName=\"jvm_memory_max_bytes\" Namespace=\"camunda\"', 'Maximum', 60)", "id": "e57" } ]
+                ],
+                "region": "eu-west-1",
+                "yAxis": {
+                    "left": {
+                        "min": 0,
+                        "label": "bytes"
+                    }
+                }
+            }
+        },
+        {
+            "type": "metric",
+            "x": 16,
+            "y": 133,
+            "width": 8,
+            "height": 6,
+            "properties": {
+                "title": "JVM buffer pool — per component",
+                "view": "timeSeries",
+                "stacked": false,
+                "metrics": [
+                    [ { "expression": "SEARCH('{ContainerInsights/Prometheus,Namespace,Component} MetricName=\"jvm_buffer_pool_used_bytes\" Namespace=\"camunda\"', 'Maximum', 60)", "id": "e58" } ]
+                ],
+                "region": "eu-west-1",
+                "yAxis": {
+                    "left": {
+                        "min": 0,
+                        "label": "bytes"
+                    }
+                }
+            }
+        },
+        {
+            "type": "metric",
+            "x": 0,
+            "y": 139,
+            "width": 8,
+            "height": 6,
+            "properties": {
+                "title": "JVM threads live — per component",
+                "view": "timeSeries",
+                "stacked": false,
+                "metrics": [
+                    [ { "expression": "SEARCH('{ContainerInsights/Prometheus,Namespace,Component} MetricName=\"jvm_threads_live_threads\" Namespace=\"camunda\"', 'Maximum', 60)", "id": "e59" } ]
+                ],
+                "region": "eu-west-1",
+                "yAxis": {
+                    "left": {
+                        "min": 0
+                    }
+                }
+            }
+        },
+        {
+            "type": "metric",
+            "x": 8,
+            "y": 139,
+            "width": 8,
+            "height": 6,
+            "properties": {
+                "title": "JVM threads daemon — per component",
+                "view": "timeSeries",
+                "stacked": false,
+                "metrics": [
+                    [ { "expression": "SEARCH('{ContainerInsights/Prometheus,Namespace,Component} MetricName=\"jvm_threads_daemon_threads\" Namespace=\"camunda\"', 'Maximum', 60)", "id": "e60" } ]
+                ],
+                "region": "eu-west-1",
+                "yAxis": {
+                    "left": {
+                        "min": 0
+                    }
+                }
+            }
+        },
+        {
+            "type": "metric",
+            "x": 16,
+            "y": 139,
+            "width": 8,
+            "height": 6,
+            "properties": {
+                "title": "GC pause avg seconds (all components)",
+                "view": "timeSeries",
+                "stacked": false,
+                "metrics": [
+                    [ { "expression": "IF(m2>0, m1/m2, 0)", "label": "Avg pause (s)", "id": "e996" } ],
+                    [ "ContainerInsights/Prometheus", "jvm_gc_pause_seconds_sum", "Namespace", "camunda", { "id": "m1", "stat": "Sum", "period": 60, "visible": false } ],
+                    [ "ContainerInsights/Prometheus", "jvm_gc_pause_seconds_count", "Namespace", "camunda", { "id": "m2", "stat": "Sum", "period": 60, "visible": false } ]
+                ],
+                "region": "eu-west-1",
+                "yAxis": {
+                    "left": {
+                        "min": 0,
+                        "label": "seconds"
+                    }
+                }
+            }
+        },
+        {
+            "type": "text",
+            "x": 0,
+            "y": 145,
+            "width": 24,
+            "height": 1,
+            "properties": {
+                "markdown": "## CPU & File Descriptors"
+            }
+        },
+        {
+            "type": "metric",
+            "x": 0,
+            "y": 146,
+            "width": 8,
+            "height": 6,
+            "properties": {
+                "title": "Process CPU — per component",
+                "view": "timeSeries",
+                "stacked": false,
+                "metrics": [
+                    [ { "expression": "SEARCH('{ContainerInsights/Prometheus,Namespace,Component} MetricName=\"process_cpu_usage\" Namespace=\"camunda\"', 'Maximum', 60)", "id": "e61" } ]
+                ],
+                "region": "eu-west-1",
+                "yAxis": {
+                    "left": {
+                        "min": 0,
+                        "max": 1.1,
+                        "label": "fraction"
+                    }
+                }
+            }
+        },
+        {
+            "type": "metric",
+            "x": 8,
+            "y": 146,
+            "width": 8,
+            "height": 6,
+            "properties": {
+                "title": "System load 1m — per component",
+                "view": "timeSeries",
+                "stacked": false,
+                "metrics": [
+                    [ { "expression": "SEARCH('{ContainerInsights/Prometheus,Namespace,Component} MetricName=\"system_load_average_1m\" Namespace=\"camunda\"', 'Maximum', 60)", "id": "e62" } ]
+                ],
+                "region": "eu-west-1",
+                "yAxis": {
+                    "left": {
+                        "min": 0
+                    }
+                }
+            }
+        },
+        {
+            "type": "metric",
+            "x": 16,
+            "y": 146,
+            "width": 8,
+            "height": 6,
+            "properties": {
+                "title": "Open file descriptors — per component",
+                "view": "timeSeries",
+                "stacked": false,
+                "metrics": [
+                    [ { "expression": "SEARCH('{ContainerInsights/Prometheus,Namespace,Component} MetricName=\"process_open_fds\" Namespace=\"camunda\"', 'Maximum', 60)", "id": "e63" } ]
+                ],
+                "region": "eu-west-1",
+                "yAxis": {
+                    "left": {
+                        "min": 0
+                    }
+                }
+            }
+        },
+        {
+            "type": "text",
+            "x": 0,
+            "y": 152,
+            "width": 24,
+            "height": 1,
+            "properties": {
+                "markdown": "## Aggregate Health (cluster-wide)"
+            }
+        },
+        {
+            "type": "metric",
+            "x": 0,
+            "y": 153,
+            "width": 8,
+            "height": 6,
+            "properties": {
+                "title": "Stream processor records / min (cluster total)",
+                "view": "timeSeries",
+                "stacked": false,
+                "metrics": [
+                    [ { "expression": "RATE(SEARCH('{ContainerInsights/Prometheus,Namespace,Service} MetricName=\"zeebe_stream_processor_records_total\" Namespace=\"camunda\" Service=\"camunda-platform\"', 'Sum', 60))*60", "id": "e64", "label": "Records/min" } ]
+                ],
+                "region": "eu-west-1",
+                "yAxis": {
+                    "left": {
+                        "min": 0,
+                        "label": "records/min"
+                    }
+                }
+            }
+        },
+        {
+            "type": "metric",
+            "x": 8,
+            "y": 153,
+            "width": 8,
+            "height": 6,
+            "properties": {
+                "title": "Exporter events / min (cluster total)",
+                "view": "timeSeries",
+                "stacked": false,
+                "metrics": [
+                    [ { "expression": "RATE(SEARCH('{ContainerInsights/Prometheus,Namespace,Service} MetricName=\"zeebe_exporter_events_total\" Namespace=\"camunda\" Service=\"camunda-platform\"', 'Sum', 60))*60", "id": "e65", "label": "Events/min" } ]
+                ],
+                "region": "eu-west-1",
+                "yAxis": {
+                    "left": {
+                        "min": 0,
+                        "label": "events/min"
+                    }
+                }
+            }
+        },
+        {
+            "type": "metric",
+            "x": 16,
+            "y": 153,
+            "width": 8,
+            "height": 6,
+            "properties": {
+                "title": "Dropped requests / min (cluster total)",
+                "view": "timeSeries",
+                "stacked": false,
+                "metrics": [
+                    [ { "expression": "RATE(SEARCH('{ContainerInsights/Prometheus,Namespace,Service} MetricName=\"zeebe_dropped_request_count_total\" Namespace=\"camunda\" Service=\"camunda-platform\"', 'Sum', 60))*60", "id": "e66", "label": "Drops/min", "color": "#d62728" } ]
+                ],
+                "region": "eu-west-1",
+                "yAxis": {
+                    "left": {
+                        "min": 0,
+                        "label": "drops/min"
+                    }
+                },
+                "annotations": {
+                    "horizontal": [
+                        {
+                            "label": "Any drop = warning",
+                            "value": 1,
+                            "color": "#d62728"
+                        }
+                    ]
+                }
+            }
+        }
+    ]
+}

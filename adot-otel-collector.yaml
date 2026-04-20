@@ -1,4 +1,24 @@
 ---
+# =============================================================================
+# ADOT OpenTelemetry Collector — Camunda 8.8 on EKS
+#
+# Scrapes all Camunda pods + the collector itself, ships Prometheus metrics to
+# CloudWatch as EMF. Metric allow-list is aligned to the official Camunda
+# Grafana dashboards:
+#   https://github.com/camunda/camunda/tree/main/monitor/grafana
+#
+# Dimensions emitted per metric group:
+#   Partition-scoped metrics:     [Namespace, Service, partition]
+#                                 [Namespace, Service]
+#                                 [Namespace]
+#   Non-partition-scoped metrics: [Namespace, Service]
+#                                 [Namespace, Component]
+#                                 [Namespace]
+#
+# NOTE: CloudWatch cannot compute percentiles from Prometheus _bucket
+# counters. We still ship histograms (needed for _sum/_count averages) but
+# latency widgets use _max series and averages rather than true p99.
+# =============================================================================
 apiVersion: opentelemetry.io/v1alpha1
 kind: OpenTelemetryCollector
 metadata:
@@ -7,6 +27,8 @@ metadata:
 spec:
   mode: deployment
   serviceAccount: adot-collector
+
+  # Expose the collector's own telemetry on :8888 so we can self-scrape it.
   config: |
     receivers:
       prometheus:
@@ -90,6 +112,20 @@ spec:
                   action: replace
                   target_label: Service
 
+            # -----------------------------------------------------------------
+            # Collector self-monitoring
+            # -----------------------------------------------------------------
+            - job_name: otel-collector-self
+              static_configs:
+                - targets: ['localhost:8888']
+              relabel_configs:
+                - target_label: Namespace
+                  replacement: ${ADOT_NAMESPACE}
+                - target_label: Service
+                  replacement: adot-collector
+                - target_label: Component
+                  replacement: collector
+
     processors:
       batch:
         timeout: 10s
@@ -106,169 +142,233 @@ spec:
           enabled: true
         metric_declarations:
 
-          # ------------------------------------------------------------------
-          # Zeebe core — health, topology, cluster changes
-          # ------------------------------------------------------------------
+          # =================================================================
+          # PARTITION-SCOPED METRICS
+          # These carry a `partition` label (one or more per broker pod) and
+          # benefit from per-partition drill-down in CloudWatch.
+          # =================================================================
+
+          # --- Health & cluster status ---
           - dimensions:
+              - ["Namespace", "Service", "partition"]
               - ["Namespace", "Service"]
-              - ["Namespace", "Component"]
               - ["Namespace"]
             metric_name_selectors:
               - "^zeebe_health$"
+              - "^zeebe_broker_health_nodes$"
               - "^zeebe_cluster_changes_status$"
+              - "^zeebe_cluster_changes_operation_attempts_total$"
+              - "^zeebe_cluster_changes_operations_completed$"
+              - "^zeebe_cluster_changes_operations_pending$"
+              - "^zeebe_banned_instances_count$"
+              - "^zeebe_blacklisted_instances_total$"
+              - "^zeebe_active_instances_count$"
+              - "^zeebe_executed_instances_total$"
 
-          # ------------------------------------------------------------------
-          # Zeebe throughput & stream processor
-          # ------------------------------------------------------------------
+          # --- Stream processor (processing, replay, positions, state) ---
           - dimensions:
+              - ["Namespace", "Service", "partition"]
               - ["Namespace", "Service"]
-              - ["Namespace", "Component"]
               - ["Namespace"]
             metric_name_selectors:
-              - "^zeebe_stream_processor_records_total$"
-              - "^zeebe_stream_processor_latency_bucket$"
-              - "^zeebe_exporter_events_total$"
-              - "^zeebe_exporter_unprocessed_after_export_count$"
+              - "^zeebe_stream_processor_.*$"
+              - "^zeebe_replay_.*$"
 
-          # ------------------------------------------------------------------
-          # Zeebe backpressure & flow control
-          # ------------------------------------------------------------------
+          # --- Exporter (cluster exporter state + events) ---
           - dimensions:
+              - ["Namespace", "Service", "partition"]
               - ["Namespace", "Service"]
-              - ["Namespace", "Component"]
               - ["Namespace"]
             metric_name_selectors:
-              - "^zeebe_dropped_request_count_total$"
-              - "^zeebe_backpressure_requests_limit$"
-              - "^zeebe_flow_control_write_rate.*$"
+              - "^zeebe_exporter_.*$"
 
-          # ------------------------------------------------------------------
-          # Zeebe process & element instance events
+          # --- Element / process-instance / job events ---
           # Emitted only when process instances are running.
-          # Labels: action (activated|completed|terminated), type (BPMN element)
-          # ------------------------------------------------------------------
           - dimensions:
+              - ["Namespace", "Service", "partition"]
               - ["Namespace", "Service"]
-              - ["Namespace", "Component"]
               - ["Namespace"]
             metric_name_selectors:
               - "^zeebe_element_instance_events_total$"
               - "^zeebe_process_instance_events_total$"
-
-          # ------------------------------------------------------------------
-          # Zeebe job events
-          # Emitted only when jobs exist.
-          # Labels: action (created|activated|timed_out|completed|failed|canceled)
-          # ------------------------------------------------------------------
-          - dimensions:
-              - ["Namespace", "Service"]
-              - ["Namespace", "Component"]
-              - ["Namespace"]
-            metric_name_selectors:
+              - "^zeebe_process_instance_execution_time.*$"
               - "^zeebe_job_events_total$"
-              - "^zeebe_client_worker_job_activated_total$"
-              - "^zeebe_client_worker_job_handled_total$"
-
-          # ------------------------------------------------------------------
-          # Zeebe incidents
-          # Emitted only when incidents are created or resolved.
-          # ------------------------------------------------------------------
-          - dimensions:
-              - ["Namespace", "Service"]
-              - ["Namespace", "Component"]
-              - ["Namespace"]
-            metric_name_selectors:
+              - "^zeebe_job_activation_time.*$"
+              - "^zeebe_job_life_time.*$"
+              - "^zeebe_job_execution_time.*$"
+              - "^zeebe_task_execution_time.*$"
               - "^zeebe_incident_events_total$"
               - "^zeebe_pending_incidents_total$"
 
-          # ------------------------------------------------------------------
-          # Zeebe execution latency metrics
-          # Requires: ZEEBE_BROKER_EXECUTION_METRICS_EXPORTER_ENABLED=true
-          # Emitted only when process instances / jobs complete.
-          # Note: _bucket metrics are counters — CloudWatch cannot compute
-          # percentiles from them. Use _sum/_count for average latency instead.
-          # ------------------------------------------------------------------
+          # --- Backpressure & flow control ---
           - dimensions:
+              - ["Namespace", "Service", "partition"]
               - ["Namespace", "Service"]
-              - ["Namespace", "Component"]
               - ["Namespace"]
             metric_name_selectors:
-              - "^zeebe_process_instance_execution_time.*$"
-              - "^zeebe_job_execution_time.*$"
-              - "^zeebe_task_execution_time.*$"
+              - "^zeebe_backpressure_.*$"
+              - "^zeebe_dropped_request_count_total$"
+              - "^zeebe_received_request_count_total$"
+              - "^zeebe_flow_control_.*$"
+              - "^zeebe_deferred_append_count_total$"
 
-          # ------------------------------------------------------------------
-          # Zeebe log appender — latency and positions
-          # ------------------------------------------------------------------
+          # --- Log appender & sequencer (logstream) ---
           - dimensions:
+              - ["Namespace", "Service", "partition"]
               - ["Namespace", "Service"]
-              - ["Namespace", "Component"]
               - ["Namespace"]
             metric_name_selectors:
               - "^zeebe_log_appender_.*$"
-              - "^zeebe_log_segment_count$"
+              - "^zeebe_sequencer_.*$"
 
-          # ------------------------------------------------------------------
-          # Raft / Atomix — topology, leader elections, storage latency
-          # ------------------------------------------------------------------
+          # --- Snapshots ---
+          - dimensions:
+              - ["Namespace", "Service", "partition"]
+              - ["Namespace", "Service"]
+              - ["Namespace"]
+            metric_name_selectors:
+              - "^zeebe_snapshot_.*$"
+              - "^atomix_snapshot_.*$"
+
+          # --- Raft / Atomix (journal, role, append, heartbeat) ---
+          - dimensions:
+              - ["Namespace", "Service", "partition"]
+              - ["Namespace", "Service"]
+              - ["Namespace"]
+            metric_name_selectors:
+              - "^atomix_.*$"
+
+          # --- Exporters: Elasticsearch, Camunda, RDBMS ---
+          - dimensions:
+              - ["Namespace", "Service", "partition"]
+              - ["Namespace", "Service"]
+              - ["Namespace"]
+            metric_name_selectors:
+              - "^zeebe_elasticsearch_exporter_.*$"
+              - "^zeebe_camunda_exporter_.*$"
+              - "^zeebe_rdbms_exporter_.*$"
+              - "^zeebe_rdbms_table_row_count$"
+
+          # --- RocksDB ---
+          - dimensions:
+              - ["Namespace", "Service", "partition"]
+              - ["Namespace", "Service"]
+              - ["Namespace"]
+            metric_name_selectors:
+              - "^zeebe_rocksdb_.*$"
+
+          # --- Messaging (request/response between brokers) ---
+          - dimensions:
+              - ["Namespace", "Service", "partition"]
+              - ["Namespace", "Service"]
+              - ["Namespace"]
+            metric_name_selectors:
+              - "^zeebe_messaging_.*$"
+
+          # --- Checkpoints & backups ---
+          - dimensions:
+              - ["Namespace", "Service", "partition"]
+              - ["Namespace", "Service"]
+              - ["Namespace"]
+            metric_name_selectors:
+              - "^zeebe_checkpoint_.*$"
+              - "^zeebe_backup_.*$"
+              - "^camunda_backup_retention_.*$"
+              - "^camunda_checkpoint_scheduler_.*$"
+
+          # --- Batch operations (Camunda 8.7+) ---
+          - dimensions:
+              - ["Namespace", "Service", "partition"]
+              - ["Namespace", "Service"]
+              - ["Namespace"]
+            metric_name_selectors:
+              - "^zeebe_batchoperations_.*$"
+
+          # --- FEEL expression evaluation ---
+          - dimensions:
+              - ["Namespace", "Service", "partition"]
+              - ["Namespace", "Service"]
+              - ["Namespace"]
+            metric_name_selectors:
+              - "^zeebe_feel_expression_.*$"
+
+          # --- Startup & leader transition timings ---
+          - dimensions:
+              - ["Namespace", "Service", "partition"]
+              - ["Namespace", "Service"]
+              - ["Namespace"]
+            metric_name_selectors:
+              - "^zeebe_leader_transition_latency$"
+              - "^zeebe_buffered_messages_count$"
+
+          # =================================================================
+          # NON-PARTITION METRICS
+          # JVM, OS, gateway, actor scheduler — one series per pod.
+          # =================================================================
+
+          # --- Gateway (request latency, failures, stream counts) ---
           - dimensions:
               - ["Namespace", "Service"]
               - ["Namespace", "Component"]
               - ["Namespace"]
             metric_name_selectors:
-              - "^atomix_role$"
-              - "^atomix_raft_term$"
-              - "^atomix_raft_storage_.*$"
-              - "^zeebe_messaging_request_response_latency.*$"
-              - "^zeebe_smp_members_incarnation_number$"
+              - "^zeebe_gateway_.*$"
+              - "^zeebe_broker_jobs_.*$"
+              - "^zeebe_broker_open_job_stream_count$"
+              - "^zeebe_client_worker_.*$"
 
-          # ------------------------------------------------------------------
-          # Zeebe banned / blacklisted instances
-          # ------------------------------------------------------------------
+          # --- gRPC server ---
           - dimensions:
               - ["Namespace", "Service"]
               - ["Namespace", "Component"]
               - ["Namespace"]
             metric_name_selectors:
-              - "^zeebe_banned_instances_count$"
-              - "^zeebe_blacklisted_instances_total$"
+              - "^grpc_server_.*$"
 
-          # ------------------------------------------------------------------
-          # JVM & system — heap, GC, CPU, threads (all components)
-          # ------------------------------------------------------------------
+          # --- REST / HTTP server (Spring Boot actuator) ---
           - dimensions:
               - ["Namespace", "Service"]
               - ["Namespace", "Component"]
               - ["Namespace"]
             metric_name_selectors:
-              - "^jvm_memory_used_bytes$"
-              - "^jvm_memory_max_bytes$"
-              - "^jvm_memory_committed_bytes$"
-              - "^jvm_gc_pause_seconds_sum$"
-              - "^jvm_gc_pause_seconds_count$"
-              - "^jvm_gc_pause_seconds_max$"
-              - "^jvm_gc_memory_allocated_bytes_total$"
-              - "^jvm_gc_memory_promoted_bytes_total$"
-              - "^jvm_gc_live_data_size_bytes$"
-              - "^jvm_gc_max_data_size_bytes$"
-              - "^jvm_threads_live_threads$"
-              - "^jvm_threads_daemon_threads$"
-              - "^jvm_threads_peak_threads$"
-              - "^jvm_buffer_memory_used_bytes$"
+              - "^http_server_requests_.*$"
+
+          # --- Actor scheduler ---
+          - dimensions:
+              - ["Namespace", "Service"]
+              - ["Namespace", "Component"]
+              - ["Namespace"]
+            metric_name_selectors:
+              - "^zeebe_actor_.*$"
+
+          # --- SWIM cluster membership / DNS ---
+          - dimensions:
+              - ["Namespace", "Service"]
+              - ["Namespace", "Component"]
+              - ["Namespace"]
+            metric_name_selectors:
+              - "^zeebe_smp_.*$"
+              - "^zeebe_dns_.*$"
+
+          # --- JVM & system (heap, GC, CPU, threads) ---
+          - dimensions:
+              - ["Namespace", "Service"]
+              - ["Namespace", "Component"]
+              - ["Namespace"]
+            metric_name_selectors:
+              - "^jvm_.*$"
               - "^process_cpu_usage$"
               - "^process_cpu_seconds_total$"
               - "^process_open_fds$"
               - "^process_max_fds$"
+              - "^process_files_.*$"
               - "^system_cpu_usage$"
               - "^system_load_average_1m$"
-              - "^executor_active_threads$"
-              - "^executor_queued_tasks$"
-              - "^executor_pool_size_threads$"
-              - "^executor_completed_tasks_total$"
+              - "^executor_.*$"
+              - "^netty_.*$"
+              - "^camunda_memory_nmt_.*$"
 
-          # ------------------------------------------------------------------
-          # Camunda application metrics (Operate, Tasklist, Optimize)
-          # ------------------------------------------------------------------
+          # --- Camunda application metrics (Operate, Tasklist, Optimize) ---
           - dimensions:
               - ["Namespace", "Service"]
               - ["Namespace", "Component"]
@@ -276,7 +376,24 @@ spec:
             metric_name_selectors:
               - "^camunda_.*$"
 
+          # =================================================================
+          # COLLECTOR SELF-MONITORING
+          # Alert on scrape failures, dropped metrics, export errors.
+          # =================================================================
+          - dimensions:
+              - ["Namespace", "Service"]
+              - ["Namespace"]
+            metric_name_selectors:
+              - "^otelcol_receiver_.*$"
+              - "^otelcol_processor_.*$"
+              - "^otelcol_exporter_.*$"
+              - "^otelcol_process_.*$"
+
     service:
+      # ADOT Collector v0.46 uses the older telemetry schema.
+      # `address:` is the newer OTel Collector syntax (>=v0.123) and causes
+      # v0.46 to fail startup with: "'' has invalid keys: address".
+      # Default self-metrics exposure on :8888 is implicit in v0.46.
       pipelines:
         metrics:
           receivers: [prometheus]
