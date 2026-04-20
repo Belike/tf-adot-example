@@ -1,0 +1,284 @@
+---
+apiVersion: opentelemetry.io/v1alpha1
+kind: OpenTelemetryCollector
+metadata:
+  name: camunda-prometheus
+  namespace: ${ADOT_NAMESPACE}
+spec:
+  mode: deployment
+  serviceAccount: adot-collector
+  config: |
+    receivers:
+      prometheus:
+        config:
+          global:
+            scrape_interval: 30s
+            scrape_timeout: 10s
+          scrape_configs:
+
+            # -----------------------------------------------------------------
+            # All Camunda pods — driven entirely by pod annotations.
+            #
+            # Port reference from Helm values:
+            #   orchestration  -> 9600  /orchestration/actuator/prometheus
+            #   optimize       -> 8092  /optimize/actuator/prometheus
+            #   connectors     -> 8080  /connectors/actuator/prometheus
+            #   identity       -> 82    /identity/actuator/prometheus
+            #   web-modeler    -> 8091  /metrics
+            # -----------------------------------------------------------------
+            - job_name: camunda-pods
+              kubernetes_sd_configs:
+                - role: pod
+              relabel_configs:
+                - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_scrape]
+                  action: keep
+                  regex: "true"
+                - source_labels: [__meta_kubernetes_namespace]
+                  action: keep
+                  regex: camunda
+                - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_path]
+                  action: replace
+                  target_label: __metrics_path__
+                  regex: (.+)
+                - source_labels: [__address__, __meta_kubernetes_pod_annotation_prometheus_io_port]
+                  action: replace
+                  regex: '([^:]+)(?::\d+)?;(\d+)'
+                  replacement: $1:$2
+                  target_label: __address__
+                - source_labels: [__meta_kubernetes_namespace]
+                  action: replace
+                  target_label: Namespace
+                - source_labels: [__meta_kubernetes_pod_name]
+                  action: replace
+                  target_label: PodName
+                - source_labels: [__meta_kubernetes_pod_node_name]
+                  action: replace
+                  target_label: NodeName
+                - source_labels: [__meta_kubernetes_pod_label_app_kubernetes_io_name]
+                  action: replace
+                  target_label: Service
+                - source_labels: [__meta_kubernetes_pod_label_app_kubernetes_io_component]
+                  action: replace
+                  target_label: Component
+
+            # -----------------------------------------------------------------
+            # Service endpoints (headless services, external exporters)
+            # -----------------------------------------------------------------
+            - job_name: camunda-services
+              kubernetes_sd_configs:
+                - role: endpoints
+              relabel_configs:
+                - source_labels: [__meta_kubernetes_service_annotation_prometheus_io_scrape]
+                  action: keep
+                  regex: "true"
+                - source_labels: [__meta_kubernetes_namespace]
+                  action: keep
+                  regex: camunda
+                - source_labels: [__meta_kubernetes_service_annotation_prometheus_io_path]
+                  action: replace
+                  target_label: __metrics_path__
+                  regex: (.+)
+                - source_labels: [__address__, __meta_kubernetes_service_annotation_prometheus_io_port]
+                  action: replace
+                  regex: '([^:]+)(?::\d+)?;(\d+)'
+                  replacement: $1:$2
+                  target_label: __address__
+                - source_labels: [__meta_kubernetes_namespace]
+                  action: replace
+                  target_label: Namespace
+                - source_labels: [__meta_kubernetes_service_name]
+                  action: replace
+                  target_label: Service
+
+    processors:
+      batch:
+        timeout: 10s
+        send_batch_size: 1000
+
+    exporters:
+      awsemf:
+        region: ${AWS_REGION}
+        namespace: ContainerInsights/Prometheus
+        log_group_name: ${CW_LOG_GROUP_PROMETHEUS}
+        log_stream_name: "{NodeName}"
+        dimension_rollup_option: NoDimensionRollup
+        resource_to_telemetry_conversion:
+          enabled: true
+        metric_declarations:
+
+          # ------------------------------------------------------------------
+          # Zeebe core — health, topology, cluster changes
+          # ------------------------------------------------------------------
+          - dimensions:
+              - ["Namespace", "Service"]
+              - ["Namespace", "Component"]
+              - ["Namespace"]
+            metric_name_selectors:
+              - "^zeebe_health$"
+              - "^zeebe_cluster_changes_status$"
+
+          # ------------------------------------------------------------------
+          # Zeebe throughput & stream processor
+          # ------------------------------------------------------------------
+          - dimensions:
+              - ["Namespace", "Service"]
+              - ["Namespace", "Component"]
+              - ["Namespace"]
+            metric_name_selectors:
+              - "^zeebe_stream_processor_records_total$"
+              - "^zeebe_stream_processor_latency_bucket$"
+              - "^zeebe_exporter_events_total$"
+              - "^zeebe_exporter_unprocessed_after_export_count$"
+
+          # ------------------------------------------------------------------
+          # Zeebe backpressure & flow control
+          # ------------------------------------------------------------------
+          - dimensions:
+              - ["Namespace", "Service"]
+              - ["Namespace", "Component"]
+              - ["Namespace"]
+            metric_name_selectors:
+              - "^zeebe_dropped_request_count_total$"
+              - "^zeebe_backpressure_requests_limit$"
+              - "^zeebe_flow_control_write_rate.*$"
+
+          # ------------------------------------------------------------------
+          # Zeebe process & element instance events
+          # Emitted only when process instances are running.
+          # Labels: action (activated|completed|terminated), type (BPMN element)
+          # ------------------------------------------------------------------
+          - dimensions:
+              - ["Namespace", "Service"]
+              - ["Namespace", "Component"]
+              - ["Namespace"]
+            metric_name_selectors:
+              - "^zeebe_element_instance_events_total$"
+              - "^zeebe_process_instance_events_total$"
+
+          # ------------------------------------------------------------------
+          # Zeebe job events
+          # Emitted only when jobs exist.
+          # Labels: action (created|activated|timed_out|completed|failed|canceled)
+          # ------------------------------------------------------------------
+          - dimensions:
+              - ["Namespace", "Service"]
+              - ["Namespace", "Component"]
+              - ["Namespace"]
+            metric_name_selectors:
+              - "^zeebe_job_events_total$"
+              - "^zeebe_client_worker_job_activated_total$"
+              - "^zeebe_client_worker_job_handled_total$"
+
+          # ------------------------------------------------------------------
+          # Zeebe incidents
+          # Emitted only when incidents are created or resolved.
+          # ------------------------------------------------------------------
+          - dimensions:
+              - ["Namespace", "Service"]
+              - ["Namespace", "Component"]
+              - ["Namespace"]
+            metric_name_selectors:
+              - "^zeebe_incident_events_total$"
+              - "^zeebe_pending_incidents_total$"
+
+          # ------------------------------------------------------------------
+          # Zeebe execution latency metrics
+          # Requires: ZEEBE_BROKER_EXECUTION_METRICS_EXPORTER_ENABLED=true
+          # Emitted only when process instances / jobs complete.
+          # Note: _bucket metrics are counters — CloudWatch cannot compute
+          # percentiles from them. Use _sum/_count for average latency instead.
+          # ------------------------------------------------------------------
+          - dimensions:
+              - ["Namespace", "Service"]
+              - ["Namespace", "Component"]
+              - ["Namespace"]
+            metric_name_selectors:
+              - "^zeebe_process_instance_execution_time.*$"
+              - "^zeebe_job_execution_time.*$"
+              - "^zeebe_task_execution_time.*$"
+
+          # ------------------------------------------------------------------
+          # Zeebe log appender — latency and positions
+          # ------------------------------------------------------------------
+          - dimensions:
+              - ["Namespace", "Service"]
+              - ["Namespace", "Component"]
+              - ["Namespace"]
+            metric_name_selectors:
+              - "^zeebe_log_appender_.*$"
+              - "^zeebe_log_segment_count$"
+
+          # ------------------------------------------------------------------
+          # Raft / Atomix — topology, leader elections, storage latency
+          # ------------------------------------------------------------------
+          - dimensions:
+              - ["Namespace", "Service"]
+              - ["Namespace", "Component"]
+              - ["Namespace"]
+            metric_name_selectors:
+              - "^atomix_role$"
+              - "^atomix_raft_term$"
+              - "^atomix_raft_storage_.*$"
+              - "^zeebe_messaging_request_response_latency.*$"
+              - "^zeebe_smp_members_incarnation_number$"
+
+          # ------------------------------------------------------------------
+          # Zeebe banned / blacklisted instances
+          # ------------------------------------------------------------------
+          - dimensions:
+              - ["Namespace", "Service"]
+              - ["Namespace", "Component"]
+              - ["Namespace"]
+            metric_name_selectors:
+              - "^zeebe_banned_instances_count$"
+              - "^zeebe_blacklisted_instances_total$"
+
+          # ------------------------------------------------------------------
+          # JVM & system — heap, GC, CPU, threads (all components)
+          # ------------------------------------------------------------------
+          - dimensions:
+              - ["Namespace", "Service"]
+              - ["Namespace", "Component"]
+              - ["Namespace"]
+            metric_name_selectors:
+              - "^jvm_memory_used_bytes$"
+              - "^jvm_memory_max_bytes$"
+              - "^jvm_memory_committed_bytes$"
+              - "^jvm_gc_pause_seconds_sum$"
+              - "^jvm_gc_pause_seconds_count$"
+              - "^jvm_gc_pause_seconds_max$"
+              - "^jvm_gc_memory_allocated_bytes_total$"
+              - "^jvm_gc_memory_promoted_bytes_total$"
+              - "^jvm_gc_live_data_size_bytes$"
+              - "^jvm_gc_max_data_size_bytes$"
+              - "^jvm_threads_live_threads$"
+              - "^jvm_threads_daemon_threads$"
+              - "^jvm_threads_peak_threads$"
+              - "^jvm_buffer_memory_used_bytes$"
+              - "^process_cpu_usage$"
+              - "^process_cpu_seconds_total$"
+              - "^process_open_fds$"
+              - "^process_max_fds$"
+              - "^system_cpu_usage$"
+              - "^system_load_average_1m$"
+              - "^executor_active_threads$"
+              - "^executor_queued_tasks$"
+              - "^executor_pool_size_threads$"
+              - "^executor_completed_tasks_total$"
+
+          # ------------------------------------------------------------------
+          # Camunda application metrics (Operate, Tasklist, Optimize)
+          # ------------------------------------------------------------------
+          - dimensions:
+              - ["Namespace", "Service"]
+              - ["Namespace", "Component"]
+              - ["Namespace"]
+            metric_name_selectors:
+              - "^camunda_.*$"
+
+    service:
+      pipelines:
+        metrics:
+          receivers: [prometheus]
+          processors: [batch]
+          exporters: [awsemf]
