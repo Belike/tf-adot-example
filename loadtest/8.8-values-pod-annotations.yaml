@@ -1,0 +1,148 @@
+global:
+  compatibility:
+    orchestration:
+      enabled: true
+  ingress:
+    enabled: true
+    className: nginx
+    host: "normunda.de"
+    tls:
+      enabled: true
+      secretName: "tls-secret"
+    annotations:
+      cert-manager.io/cluster-issuer: "letsencrypt-prod"
+      nginx.ingress.kubernetes.io/ssl-redirect: "true"
+      nginx.ingress.kubernetes.io/proxy-body-size: "20m"
+  identity:
+    auth:
+      enabled: true
+      publicIssuerUrl: "https://normunda.de/auth/realms/camunda-platform"
+      admin:
+        enabled: true
+        secret:
+          existingSecret: "camunda-credentials"
+          existingSecretKey: "identity-admin-client-token"
+      optimize:
+        secret:
+          existingSecret: "camunda-credentials"
+          existingSecretKey: "identity-optimize-client-token"
+        redirectUrl: "https://normunda.de/optimize"
+      identity:
+        redirectUrl: "https://normunda.de/identity"
+  security:
+    authentication:
+      method: oidc
+
+optimize:
+  enabled: false
+
+connectors:
+  enabled: true
+  contextPath: "/connectors"
+  podAnnotations:
+    prometheus.io/scrape: "true"
+    prometheus.io/port: "8080"
+    prometheus.io/path: "/connectors/actuator/prometheus"
+  security:
+    authentication:
+      method: oidc
+      oidc:
+        secret:
+          existingSecret: "camunda-credentials"
+          existingSecretKey: "identity-connectors-client-token"
+
+identity:
+  enabled: true
+  contextPath: "/identity"
+  fullURL: "https://normunda.de/identity"
+  podAnnotations:
+    prometheus.io/scrape: "true"
+    prometheus.io/port: "82"
+    prometheus.io/path: "/identity/actuator/prometheus"
+  firstUser:
+    secret:
+      existingSecret: "camunda-credentials"
+      existingSecretKey: "identity-firstuser-password"
+
+identityPostgresql:
+  enabled: true
+  auth:
+    existingSecret: camunda-credentials
+    secretKeys:
+      adminPasswordKey: "identity-postgresql-admin-password"
+      userPasswordKey: "identity-postgresql-user-password"
+
+identityKeycloak:
+  enabled: true
+  auth:
+    existingSecret: camunda-credentials
+    passwordSecretKey: "identity-keycloak-admin-password"
+  postgresql:
+    auth:
+      existingSecret: camunda-credentials
+      secretKeys:
+        adminPasswordKey: "identity-keycloak-postgresql-admin-password"
+        userPasswordKey: "identity-keycloak-postgresql-user-password"
+
+orchestration:
+  enabled: true
+  profiles:
+    broker: true
+    identity: true
+    operate: true
+    tasklist: true
+  podAnnotations:
+    prometheus.io/scrape: "true"
+    prometheus.io/port: "9600"
+    prometheus.io/path: "/orchestration/actuator/prometheus"
+
+  security:
+    authorizations:
+      enabled: false
+    authentication:
+      method: oidc
+      oidc:
+        secret:
+          existingSecret: "camunda-credentials"
+          existingSecretKey: "identity-orchestration-client-token"
+        redirectUrl: "https://normunda.de/orchestration"
+        backwardsCompatibleAudiences:
+          - zeebe-api
+        groupsClaim: "groups"
+
+  ingress:
+    grpc:
+      enabled: true
+      className: nginx
+      host: "grpc.normunda.de"
+      tls:
+        enabled: true
+        secretName: "tls-grpc-secret"
+      annotations:
+        cert-manager.io/cluster-issuer: "letsencrypt-prod"
+        ingress.kubernetes.io/rewrite-target: "/"
+        nginx.ingress.kubernetes.io/ssl-redirect: "false"
+        nginx.ingress.kubernetes.io/backend-protocol: "GRPC"
+        nginx.ingress.kubernetes.io/proxy-buffer-size: "128k"
+  contextPath: "/orchestration"
+  clusterSize: "3"
+  partitionCount: "3"
+  replicationFactor: "3"
+  pvcSize: 10Gi
+  env:
+    - name: ZEEBE_BROKER_EXECUTION_METRICS_EXPORTER_ENABLED
+      value: "true"
+
+webModeler:
+  enabled: false
+
+webModelerPostgresql:
+  enabled: false
+
+elasticsearch:
+  enabled: true
+  master:
+    replicaCount: 1
+
+prometheusServiceMonitor:
+  enabled: false

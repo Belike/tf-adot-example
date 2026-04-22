@@ -1,0 +1,37 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: payload
+  namespace: camunda
+data:
+  typical_payload.json: |
+    {
+      "branchKey": "A",
+      "correlationId": "benchmark-instance",
+      "tenantId": "default",
+      "requestType": "STANDARD",
+      "priority": 3,
+      "isValid": true,
+      "amount": 1234.56,
+      "currency": "EUR",
+      "flags": {
+        "flagA": true,
+        "flagB": false,
+        "flagC": true
+      },
+      "counters": {
+        "retryCount": 0,
+        "stepCount": 0,
+        "score": 750
+      },
+      "tags": ["benchmark", "generic", "load-test"],
+      "metadata": {
+        "source": "benchmark-client",
+        "version": "1.0",
+        "timestamp": "2026-04-21T00:00:00Z"
+      },
+      "filler1": "lorem ipsum dolor sit amet consectetur",
+      "filler2": "benchmark filler string for realistic payload size",
+      "filler3": 987654321,
+      "filler4": false
+    }

@@ -1,0 +1,127 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI" xmlns:dc="http://www.omg.org/spec/DD/20100524/DC" xmlns:di="http://www.omg.org/spec/DD/20100524/DI" xmlns:zeebe="http://camunda.org/schema/zeebe/1.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" id="Definitions_generic_benchmark" targetNamespace="http://camunda.org/benchmark" exporter="Camunda Modeler" exporterVersion="5.0.0">
+  <bpmn:process id="GenericBenchmarkProcess" name="Generic Benchmark Process" isExecutable="true">
+    <bpmn:startEvent id="StartEvent_1" name="Start">
+      <bpmn:outgoing>Flow_start_to_task1</bpmn:outgoing>
+    </bpmn:startEvent>
+
+    <bpmn:serviceTask id="Task_1" name="Service Task 1">
+      <bpmn:extensionElements>
+        <zeebe:taskDefinition type="benchmark-task" retries="3" />
+      </bpmn:extensionElements>
+      <bpmn:incoming>Flow_start_to_task1</bpmn:incoming>
+      <bpmn:outgoing>Flow_task1_to_task2</bpmn:outgoing>
+    </bpmn:serviceTask>
+
+    <bpmn:serviceTask id="Task_2" name="Service Task 2">
+      <bpmn:extensionElements>
+        <zeebe:taskDefinition type="benchmark-task" retries="3" />
+      </bpmn:extensionElements>
+      <bpmn:incoming>Flow_task1_to_task2</bpmn:incoming>
+      <bpmn:outgoing>Flow_task2_to_gateway</bpmn:outgoing>
+    </bpmn:serviceTask>
+
+    <bpmn:exclusiveGateway id="Gateway_Split" name="Route by branchKey" default="Flow_gateway_to_task5">
+      <bpmn:incoming>Flow_task2_to_gateway</bpmn:incoming>
+      <bpmn:outgoing>Flow_gateway_to_task3</bpmn:outgoing>
+      <bpmn:outgoing>Flow_gateway_to_task5</bpmn:outgoing>
+    </bpmn:exclusiveGateway>
+
+    <bpmn:serviceTask id="Task_3" name="Service Task 3 (Branch A)">
+      <bpmn:extensionElements>
+        <zeebe:taskDefinition type="benchmark-task" retries="3" />
+      </bpmn:extensionElements>
+      <bpmn:incoming>Flow_gateway_to_task3</bpmn:incoming>
+      <bpmn:outgoing>Flow_task3_to_task4</bpmn:outgoing>
+    </bpmn:serviceTask>
+
+    <bpmn:serviceTask id="Task_4" name="Service Task 4 (Branch A)">
+      <bpmn:extensionElements>
+        <zeebe:taskDefinition type="benchmark-task" retries="3" />
+      </bpmn:extensionElements>
+      <bpmn:incoming>Flow_task3_to_task4</bpmn:incoming>
+      <bpmn:outgoing>Flow_task4_to_end</bpmn:outgoing>
+    </bpmn:serviceTask>
+
+    <bpmn:serviceTask id="Task_5" name="Service Task 5 (Branch B)">
+      <bpmn:extensionElements>
+        <zeebe:taskDefinition type="benchmark-task" retries="3" />
+      </bpmn:extensionElements>
+      <bpmn:incoming>Flow_gateway_to_task5</bpmn:incoming>
+      <bpmn:outgoing>Flow_task5_to_end</bpmn:outgoing>
+    </bpmn:serviceTask>
+
+    <bpmn:endEvent id="EndEvent_1" name="End">
+      <bpmn:incoming>Flow_task4_to_end</bpmn:incoming>
+      <bpmn:incoming>Flow_task5_to_end</bpmn:incoming>
+    </bpmn:endEvent>
+
+    <bpmn:sequenceFlow id="Flow_start_to_task1" sourceRef="StartEvent_1" targetRef="Task_1" />
+    <bpmn:sequenceFlow id="Flow_task1_to_task2" sourceRef="Task_1" targetRef="Task_2" />
+    <bpmn:sequenceFlow id="Flow_task2_to_gateway" sourceRef="Task_2" targetRef="Gateway_Split" />
+    <bpmn:sequenceFlow id="Flow_gateway_to_task3" sourceRef="Gateway_Split" targetRef="Task_3">
+      <bpmn:conditionExpression xsi:type="bpmn:tFormalExpression">=branchKey = "A"</bpmn:conditionExpression>
+    </bpmn:sequenceFlow>
+    <bpmn:sequenceFlow id="Flow_gateway_to_task5" sourceRef="Gateway_Split" targetRef="Task_5" />
+    <bpmn:sequenceFlow id="Flow_task3_to_task4" sourceRef="Task_3" targetRef="Task_4" />
+    <bpmn:sequenceFlow id="Flow_task4_to_end" sourceRef="Task_4" targetRef="EndEvent_1" />
+    <bpmn:sequenceFlow id="Flow_task5_to_end" sourceRef="Task_5" targetRef="EndEvent_1" />
+  </bpmn:process>
+
+  <bpmndi:BPMNDiagram id="BPMNDiagram_1">
+    <bpmndi:BPMNPlane id="BPMNPlane_1" bpmnElement="GenericBenchmarkProcess">
+      <bpmndi:BPMNShape id="StartEvent_1_di" bpmnElement="StartEvent_1">
+        <dc:Bounds x="150" y="220" width="36" height="36" />
+        <bpmndi:BPMNLabel><dc:Bounds x="156" y="263" width="24" height="14" /></bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Task_1_di" bpmnElement="Task_1">
+        <dc:Bounds x="230" y="198" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Task_2_di" bpmnElement="Task_2">
+        <dc:Bounds x="370" y="198" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Gateway_Split_di" bpmnElement="Gateway_Split" isMarkerVisible="true">
+        <dc:Bounds x="510" y="213" width="50" height="50" />
+        <bpmndi:BPMNLabel><dc:Bounds x="498" y="183" width="75" height="14" /></bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Task_3_di" bpmnElement="Task_3">
+        <dc:Bounds x="600" y="100" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Task_4_di" bpmnElement="Task_4">
+        <dc:Bounds x="740" y="100" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Task_5_di" bpmnElement="Task_5">
+        <dc:Bounds x="600" y="300" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="EndEvent_1_di" bpmnElement="EndEvent_1">
+        <dc:Bounds x="892" y="220" width="36" height="36" />
+        <bpmndi:BPMNLabel><dc:Bounds x="900" y="263" width="20" height="14" /></bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+
+      <bpmndi:BPMNEdge id="Flow_start_to_task1_di" bpmnElement="Flow_start_to_task1">
+        <di:waypoint x="186" y="238" /><di:waypoint x="230" y="238" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_task1_to_task2_di" bpmnElement="Flow_task1_to_task2">
+        <di:waypoint x="330" y="238" /><di:waypoint x="370" y="238" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_task2_to_gateway_di" bpmnElement="Flow_task2_to_gateway">
+        <di:waypoint x="470" y="238" /><di:waypoint x="510" y="238" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_gateway_to_task3_di" bpmnElement="Flow_gateway_to_task3">
+        <di:waypoint x="535" y="213" /><di:waypoint x="535" y="140" /><di:waypoint x="600" y="140" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_gateway_to_task5_di" bpmnElement="Flow_gateway_to_task5">
+        <di:waypoint x="535" y="263" /><di:waypoint x="535" y="340" /><di:waypoint x="600" y="340" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_task3_to_task4_di" bpmnElement="Flow_task3_to_task4">
+        <di:waypoint x="700" y="140" /><di:waypoint x="740" y="140" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_task4_to_end_di" bpmnElement="Flow_task4_to_end">
+        <di:waypoint x="840" y="140" /><di:waypoint x="910" y="140" /><di:waypoint x="910" y="220" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_task5_to_end_di" bpmnElement="Flow_task5_to_end">
+        <di:waypoint x="700" y="340" /><di:waypoint x="910" y="340" /><di:waypoint x="910" y="256" />
+      </bpmndi:BPMNEdge>
+    </bpmndi:BPMNPlane>
+  </bpmndi:BPMNDiagram>
+</bpmn:definitions>
