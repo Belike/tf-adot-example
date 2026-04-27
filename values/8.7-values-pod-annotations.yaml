@@ -37,42 +37,41 @@ global:
     auth:
       enabled: true
       publicIssuerUrl: "https://normunda.de/auth/realms/camunda-platform"
-      # 8.7 has per-component redirect URLs (no unified orchestration block).
-      # Each component's OIDC client secret is loaded from camunda-credentials
-      # using existingSecret.name + existingSecret.existingSecretKey. Without
-      # an explicit existingSecretKey the chart falls back to its default key
-      # (e.g. `operate-secret`), which would not match this secret's naming.
-      # The legacy `existingSecret: <plain-string>` form treats the value as
-      # the literal client-secret and exposes it in Identity's configmap, so
-      # avoid it.
+      # 8.7 hardcodes the per-component OIDC client-secret keys in the
+      # Deployment templates. Each component's pod gets a secretKeyRef to:
+      #
+      #   operate    -> key `operate-secret`
+      #   tasklist   -> key `tasklist-secret`
+      #   optimize   -> key `optimize-secret`
+      #   connectors -> key `connectors-secret`
+      #   zeebe      -> key `zeebe-secret`
+      #   webModeler -> key `webmodeler-secret`
+      #
+      # `existingSecretKey` here is silently ignored — it only takes effect
+      # in 8.8+. So we just give the chart the secret name and make sure
+      # `camunda-credentials` carries those exact keys.
       operate:
         redirectUrl: "https://normunda.de/operate"
         existingSecret:
           name: "camunda-credentials"
-        existingSecretKey: "identity-operate-client-token"
       tasklist:
         redirectUrl: "https://normunda.de/tasklist"
         existingSecret:
           name: "camunda-credentials"
-        existingSecretKey: "identity-tasklist-client-token"
       optimize:
         redirectUrl: "https://normunda.de/optimize"
         existingSecret:
           name: "camunda-credentials"
-        existingSecretKey: "identity-optimize-client-token"
       webModeler:
         redirectUrl: "https://normunda.de/modeler"
         existingSecret:
           name: "camunda-credentials"
-        existingSecretKey: "identity-webmodeler-client-token"
       connectors:
         existingSecret:
           name: "camunda-credentials"
-        existingSecretKey: "identity-connectors-client-token"
       zeebe:
         existingSecret:
           name: "camunda-credentials"
-        existingSecretKey: "identity-zeebe-client-token"
 
 # -----------------------------------------------------------------------------
 # Zeebe broker (StatefulSet)
@@ -208,32 +207,24 @@ identityKeycloak:
         userPasswordKey: "identity-keycloak-postgresql-user-password"
 
 # -----------------------------------------------------------------------------
-# Web Modeler
-# Pod label app.kubernetes.io/name=web-modeler -> Service="web-modeler"
-# REST-API exposes Micrometer at :8091/metrics (note: NOT /actuator/prometheus)
+# Web Modeler — DISABLED in this demo setup.
+#
+# Web Modeler restapi requires real SMTP credentials (the placeholder
+# `smtp.example.com` makes the pod CrashLoopBackOff at startup) and a
+# Pusher app id/key/secret it loads from the auto-generated
+# `camunda-web-modeler` and `camunda-web-modeler-restapi` Secrets — neither
+# of which is satisfiable from `camunda-credentials` alone. Re-enable once
+# you have real SMTP + Pusher credentials and provide them via:
+#   webModeler.restapi.mail.{smtpHost,smtpPort,smtpUser,smtpPassword,fromAddress}
+#   webModeler.restapi.externalPusher.{appId,key,secret}
+# Pod label is app.kubernetes.io/name=web-modeler when re-enabled; metrics
+# at :8091/metrics (not /actuator/prometheus).
 # -----------------------------------------------------------------------------
 webModeler:
-  enabled: true
-  contextPath: "/modeler"
-  restapi:
-    podAnnotations:
-      prometheus.io/scrape: "true"
-      prometheus.io/port: "8091"
-      prometheus.io/path: "/metrics"
-    mail:
-      smtpHost: smtp.example.com
-      smtpPort: 587
-      smtpUser: user
-      smtpPassword: secret
-      fromAddress: no-reply@example.com
+  enabled: false
 
 webModelerPostgresql:
-  enabled: true
-  auth:
-    existingSecret: "camunda-credentials"
-    secretKeys:
-      adminPasswordKey: "webmodeler-postgresql-admin-password"
-      userPasswordKey: "webmodeler-postgresql-user-password"
+  enabled: false
 
 # -----------------------------------------------------------------------------
 # Elasticsearch (single master for non-prod sizing)
