@@ -38,3 +38,5 @@ override.tf.json
 terraform.rc
 
 .idea
+
+87-credentials.yaml
