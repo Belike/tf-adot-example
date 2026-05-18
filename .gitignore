@@ -40,3 +40,5 @@ terraform.rc
 .idea
 
 87-credentials.yaml
+88-credentials.yaml
+87-secrets.yaml

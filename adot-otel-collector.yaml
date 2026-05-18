@@ -1,23 +1,56 @@
 ---
 # =============================================================================
-# ADOT OpenTelemetry Collector — Camunda 8.8 on EKS
+# ADOT OpenTelemetry Collector — Camunda 8.7 on EKS
 #
 # Scrapes all Camunda pods + the collector itself, ships Prometheus metrics to
 # CloudWatch as EMF. Metric allow-list is aligned to the official Camunda
-# Grafana dashboards:
-#   https://github.com/camunda/camunda/tree/main/monitor/grafana
+# Grafana dashboards: https://github.com/camunda/camunda/tree/main/monitor/grafana
+#
+# Pairs with the amazon-cloudwatch-observability EKS addon, which provides:
+#   - FluentBit DaemonSet shipping pod stdout/stderr to CloudWatch Logs
+#     (log group: /aws/containerinsights/<cluster>/application)
+#   - Container Insights metrics (namespace ContainerInsights) for pod
+#     restarts, CPU/memory utilization vs limits, etc.
+# Those two pipelines complement this one — this collector handles the
+# Camunda-specific Prometheus metrics only.
 #
 # Dimensions emitted per metric group:
-#   Partition-scoped metrics:     [Namespace, Service, partition]
-#                                 [Namespace, Service]
-#                                 [Namespace]
-#   Non-partition-scoped metrics: [Namespace, Service]
-#                                 [Namespace, Component]
-#                                 [Namespace]
+#   Partition-scoped:     [Namespace, Service, partition]
+#                         [Namespace, Service]
+#                         [Namespace]
+#   Non-partition:        [Namespace, Service]
+#                         [Namespace, Component]
+#                         [Namespace]
+#   Plus dedicated overlay blocks where label-based filtering is needed:
+#     atomix_role:        + [Namespace, Service, PodName, partition]
+#                         + [Namespace, Service, PodName]
+#     zeebe_backup_operations_total:
+#                         + [Namespace, Service, partition, operation, result]
+#                         + [Namespace, Service, operation, result]
+#     executor_*:         [Namespace, Service, name] (in dedicated block)
 #
-# NOTE: CloudWatch cannot compute percentiles from Prometheus _bucket
-# counters. We still ship histograms (needed for _sum/_count averages) but
-# latency widgets use _max series and averages rather than true p99.
+# Service label values produced from the 8.7 Helm chart pod labels:
+#   zeebe, zeebe-gateway, operate, tasklist, optimize, connectors, identity
+#   (web-modeler emits at port 8091 path /metrics when enabled)
+#
+# 8.7-specific notes:
+#   - Camunda Exporter is BETA in 8.7 (GA in 8.8). The legacy Elasticsearch
+#     exporter is the default in 8.7. zeebe_camunda_exporter_* entries here
+#     are forward-compatible but won't emit until that exporter is enabled.
+#   - RDBMS exporter is ALPHA in 8.7. zeebe_rdbms_* entries are forward-only.
+#   - Batch operations are EXPERIMENTAL in 8.7 under
+#     zeebe.broker.experimental.engine.batchOperations.*. zeebe_batchoperations_*
+#     metrics only appear when explicitly enabled.
+#   - zeebe_process_instance_execution_time_* requires
+#     ZEEBE_BROKER_EXECUTION_METRICS_EXPORTER_ENABLED=true on brokers in 8.7
+#     (already set in the Helm values for this stack).
+#   - In 8.7 Operate / Tasklist / Optimize emit metrics under their own
+#     prefixes — the ^camunda_.*$ allowlist does NOT cover them. Dedicated
+#     block below.
+#
+# CloudWatch CANNOT compute percentiles from Prometheus _bucket counters.
+# Histograms are still shipped (needed for _sum/_count averages) but latency
+# alarms must use _max series or compute averages via metric math.
 # =============================================================================
 apiVersion: opentelemetry.io/v1alpha1
 kind: OpenTelemetryCollector
@@ -41,12 +74,15 @@ spec:
             # -----------------------------------------------------------------
             # All Camunda pods — driven entirely by pod annotations.
             #
-            # Port reference from Helm values:
-            #   orchestration  -> 9600  /orchestration/actuator/prometheus
-            #   optimize       -> 8092  /optimize/actuator/prometheus
-            #   connectors     -> 8080  /connectors/actuator/prometheus
-            #   identity       -> 82    /identity/actuator/prometheus
-            #   web-modeler    -> 8091  /metrics
+            # Annotation values per 8.7 Helm values:
+            #   zeebe          -> 9600 /actuator/prometheus
+            #   zeebe-gateway  -> 9600 /actuator/prometheus
+            #   operate        -> 9600 /actuator/prometheus
+            #   tasklist       -> 9600 /actuator/prometheus
+            #   optimize       -> 8092 /actuator/prometheus
+            #   connectors     -> 8080 /actuator/prometheus
+            #   identity       -> 8082 /actuator/prometheus
+            #   web-modeler    -> 8091 /metrics  (when enabled)
             # -----------------------------------------------------------------
             - job_name: camunda-pods
               kubernetes_sd_configs:
@@ -144,8 +180,7 @@ spec:
 
           # =================================================================
           # PARTITION-SCOPED METRICS
-          # These carry a `partition` label (one or more per broker pod) and
-          # benefit from per-partition drill-down in CloudWatch.
+          # These carry a `partition` label (one or more per broker pod).
           # =================================================================
 
           # --- Health & cluster status ---
@@ -184,6 +219,9 @@ spec:
 
           # --- Element / process-instance / job events ---
           # Emitted only when process instances are running.
+          # NOTE: ^zeebe_process_instance_execution_time.*$ requires
+          #   ZEEBE_BROKER_EXECUTION_METRICS_EXPORTER_ENABLED=true on brokers
+          #   (already set in the matching 8.7 Helm values).
           - dimensions:
               - ["Namespace", "Service", "partition"]
               - ["Namespace", "Service"]
@@ -230,7 +268,7 @@ spec:
               - "^zeebe_snapshot_.*$"
               - "^atomix_snapshot_.*$"
 
-          # --- Raft / Atomix (journal, role, append, heartbeat) ---
+          # --- Raft / Atomix (general) ---
           - dimensions:
               - ["Namespace", "Service", "partition"]
               - ["Namespace", "Service"]
@@ -238,7 +276,26 @@ spec:
             metric_name_selectors:
               - "^atomix_.*$"
 
+          # --- atomix_role overlay: per-pod leader-spread alarming ---
+          # Adds [Namespace, Service, PodName, partition] and
+          # [Namespace, Service, PodName] dimension sets so the Unbalanced
+          # Cluster alarm can compute leader counts per pod.
+          # NOTE: atomix_role enum varies across versions. In current Zeebe
+          # forks the value 3 typically means LEADER. Verify on your cluster
+          # via `kubectl exec -n camunda zeebe-0 -- curl -s
+          # localhost:9600/actuator/prometheus | grep '^atomix_role'` before
+          # writing the alarm.
+          - dimensions:
+              - ["Namespace", "Service", "PodName", "partition"]
+              - ["Namespace", "Service", "PodName"]
+            metric_name_selectors:
+              - "^atomix_role$"
+
           # --- Exporters: Elasticsearch, Camunda, RDBMS ---
+          # 8.7 status:
+          #   zeebe_elasticsearch_exporter_*: GA, default exporter in 8.7.
+          #   zeebe_camunda_exporter_*:       BETA in 8.7 (GA in 8.8).
+          #   zeebe_rdbms_exporter_*:         ALPHA in 8.7. Forward-only.
           - dimensions:
               - ["Namespace", "Service", "partition"]
               - ["Namespace", "Service"]
@@ -265,7 +322,7 @@ spec:
             metric_name_selectors:
               - "^zeebe_messaging_.*$"
 
-          # --- Checkpoints & backups ---
+          # --- Checkpoints & backups (general) ---
           - dimensions:
               - ["Namespace", "Service", "partition"]
               - ["Namespace", "Service"]
@@ -276,7 +333,19 @@ spec:
               - "^camunda_backup_retention_.*$"
               - "^camunda_checkpoint_scheduler_.*$"
 
-          # --- Batch operations (Camunda 8.7+) ---
+          # --- zeebe_backup_operations_total overlay: carry operation+result ---
+          # Required by the Backup Failed alarm so it can compare RATE of
+          # failed vs completed status checks. Cardinality bounded:
+          # ~3 operations × ~3 results × N partitions.
+          - dimensions:
+              - ["Namespace", "Service", "partition", "operation", "result"]
+              - ["Namespace", "Service", "operation", "result"]
+            metric_name_selectors:
+              - "^zeebe_backup_operations_total$"
+
+          # --- Batch operations ---
+          # 8.7 status: EXPERIMENTAL. Only emitted when explicitly enabled via
+          #   zeebe.broker.experimental.engine.batchOperations.* config path.
           - dimensions:
               - ["Namespace", "Service", "partition"]
               - ["Namespace", "Service"]
@@ -307,6 +376,7 @@ spec:
           # =================================================================
 
           # --- Gateway (request latency, failures, stream counts) ---
+          # Service="zeebe-gateway"
           - dimensions:
               - ["Namespace", "Service"]
               - ["Namespace", "Component"]
@@ -318,6 +388,7 @@ spec:
               - "^zeebe_client_worker_.*$"
 
           # --- gRPC server ---
+          # Service="zeebe-gateway" (broker doesn't expose gRPC server metrics)
           - dimensions:
               - ["Namespace", "Service"]
               - ["Namespace", "Component"]
@@ -326,6 +397,7 @@ spec:
               - "^grpc_server_.*$"
 
           # --- REST / HTTP server (Spring Boot actuator) ---
+          # Emitted by every webapp: operate, tasklist, optimize, connectors, identity
           - dimensions:
               - ["Namespace", "Service"]
               - ["Namespace", "Component"]
@@ -350,6 +422,17 @@ spec:
               - "^zeebe_smp_.*$"
               - "^zeebe_dns_.*$"
 
+          # --- Executor thread pools ---
+          # Required by the Job Worker / Connectors backlog alarms which
+          # filter by name="zeebe_client_thread_pool". Without `name` as a
+          # dimension all executor pools collapse into one series.
+          - dimensions:
+              - ["Namespace", "Service", "name"]
+              - ["Namespace", "Service"]
+              - ["Namespace"]
+            metric_name_selectors:
+              - "^executor_.*$"
+
           # --- JVM & system (heap, GC, CPU, threads) ---
           - dimensions:
               - ["Namespace", "Service"]
@@ -364,17 +447,33 @@ spec:
               - "^process_files_.*$"
               - "^system_cpu_usage$"
               - "^system_load_average_1m$"
-              - "^executor_.*$"
               - "^netty_.*$"
               - "^camunda_memory_nmt_.*$"
 
-          # --- Camunda application metrics (Operate, Tasklist, Optimize) ---
+          # --- Camunda cross-cutting (backup retention, checkpoint scheduler, NMT) ---
+          # In 8.7 the ^camunda_.*$ prefix is limited — does NOT include the
+          # Operate/Tasklist/Optimize importer or app metrics, which use their
+          # own prefixes (declared below).
           - dimensions:
               - ["Namespace", "Service"]
               - ["Namespace", "Component"]
               - ["Namespace"]
             metric_name_selectors:
               - "^camunda_.*$"
+
+          # --- Operate / Tasklist / Optimize (8.7 importer + app metrics) ---
+          # Required by the importer-lag alarms:
+          #   operate_import_time_seconds_{sum,count}
+          #   tasklist_import_time_seconds_{sum,count}
+          #   optimize_import_overallImportTime_seconds_{sum,count}
+          - dimensions:
+              - ["Namespace", "Service"]
+              - ["Namespace", "Component"]
+              - ["Namespace"]
+            metric_name_selectors:
+              - "^operate_.*$"
+              - "^tasklist_.*$"
+              - "^optimize_.*$"
 
           # =================================================================
           # COLLECTOR SELF-MONITORING

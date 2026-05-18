@@ -1,0 +1,247 @@
+# 8.7-values-oidc-with-WebModeler.yaml
+# Camunda 8.7 Self-Managed, EntraID OIDC, external Postgres via existingSecret
+
+global:
+  ingress:
+    enabled: true
+    className: nginx
+    host: "normunda.de"
+    tls:
+      enabled: true
+      secretName: "tls-secret"
+    annotations:
+      cert-manager.io/cluster-issuer: "letsencrypt-prod"
+      ingress.kubernetes.io/rewrite-target: "/"
+      nginx.ingress.kubernetes.io/ssl-redirect: "false"
+      nginx.ingress.kubernetes.io/proxy-buffering: null
+
+  identity:
+    auth:
+      issuer: https://login.microsoftonline.com/cbd46654-4f74-4332-a490-69f0f071ba9f/v2.0
+      issuerBackendUrl: https://login.microsoftonline.com/cbd46654-4f74-4332-a490-69f0f071ba9f/v2.0
+      tokenUrl: https://login.microsoftonline.com/cbd46654-4f74-4332-a490-69f0f071ba9f/oauth2/v2.0/token
+      jwksUrl: https://login.microsoftonline.com/cbd46654-4f74-4332-a490-69f0f071ba9f/discovery/v2.0/keys
+      type: "MICROSOFT"
+      publicIssuerUrl: https://login.microsoftonline.com/cbd46654-4f74-4332-a490-69f0f071ba9f/v2.0
+
+      identity:
+        clientId: 0d73edf5-5114-44ab-8c39-03f4e30c08e9
+        audience: 0d73edf5-5114-44ab-8c39-03f4e30c08e9
+        initialClaimValue: 7c8c8609-2bf9-4e8e-ac23-b31749531779
+        redirectUrl: "https://www.normunda.de/identity"
+        existingSecret:
+          name: static-secret
+        existingSecretKey: identity-secret
+
+      operate:
+        clientId: 0d73edf5-5114-44ab-8c39-03f4e30c08e9
+        audience: 0d73edf5-5114-44ab-8c39-03f4e30c08e9
+        redirectUrl: "https://www.normunda.de/operate"
+        existingSecret:
+          name: static-secret
+        existingSecretKey: operate-secret
+
+      tasklist:
+        clientId: 0d73edf5-5114-44ab-8c39-03f4e30c08e9
+        audience: 0d73edf5-5114-44ab-8c39-03f4e30c08e9
+        redirectUrl: "https://www.normunda.de/tasklist"
+        existingSecret:
+          name: static-secret
+        existingSecretKey: tasklist-secret
+
+      optimize:
+        clientId: 0d73edf5-5114-44ab-8c39-03f4e30c08e9
+        audience: 0d73edf5-5114-44ab-8c39-03f4e30c08e9
+        redirectUrl: "https://www.normunda.de/optimize"
+        existingSecret:
+          name: static-secret
+        existingSecretKey: optimize-secret
+
+      zeebe:
+        clientId: 0d73edf5-5114-44ab-8c39-03f4e30c08e9
+        audience: 0d73edf5-5114-44ab-8c39-03f4e30c08e9
+        tokenScope: 0d73edf5-5114-44ab-8c39-03f4e30c08e9/.default
+        existingSecret:
+          name: static-secret
+        existingSecretKey: zeebe-secret
+
+      webModeler:
+        clientId: 0d73edf5-5114-44ab-8c39-03f4e30c08e9
+        clientApiAudience: 0d73edf5-5114-44ab-8c39-03f4e30c08e9
+        publicApiAudience: 0d73edf5-5114-44ab-8c39-03f4e30c08e9
+        redirectUrl: "https://www.normunda.de/modeler"
+        existingSecret:
+          name: static-secret
+        existingSecretKey: web-modeler-secret
+
+      console:
+        clientId: 0d73edf5-5114-44ab-8c39-03f4e30c08e9
+        audience: 0d73edf5-5114-44ab-8c39-03f4e30c08e9
+        redirectUrl: "https://www.normunda.de/console"
+        wellKnown: https://login.microsoftonline.com/cbd46654-4f74-4332-a490-69f0f071ba9f/v2.0/.well-known/openid-configuration
+        existingSecret:
+          name: static-secret
+        existingSecretKey: console-secret
+
+      connectors:
+        clientId: 0d73edf5-5114-44ab-8c39-03f4e30c08e9
+        existingSecret:
+          name: static-secret
+        existingSecretKey: connectors-secret
+
+# -----------------------------------------------------------------------------
+# Components
+# -----------------------------------------------------------------------------
+
+operate:
+  enabled: true
+  contextPath: "/operate"
+
+tasklist:
+  enabled: true
+  contextPath: "/tasklist"
+
+optimize:
+  enabled: true
+  contextPath: "/optimize"
+
+connectors:
+  enabled: true
+  contextPath: "/connectors"
+  env:
+    - name: OPERATE_CLIENT_SCOPE
+      value: "0d73edf5-5114-44ab-8c39-03f4e30c08e9/.default"
+
+identity:
+  enabled: true
+  contextPath: "/identity"
+  fullURL: "https://normunda.de/identity"
+  # Role_[0]
+  env:
+    - name: IDENTITY_COMPONENT_PRESETS_IDENTITY_ROLES_0_NAME
+      value: "support-role"
+    - name: IDENTITY_COMPONENT_PRESETS_IDENTITY_ROLES_0_DESCRIPTION
+      value: "support role description"
+    - name: IDENTITY_COMPONENT_PRESETS_IDENTITY_ROLES_0_PERMISSIONS_0_AUDIENCE
+      value: "0d73edf5-5114-44ab-8c39-03f4e30c08e9"
+    - name: IDENTITY_COMPONENT_PRESETS_IDENTITY_ROLES_0_PERMISSIONS_0_DEFINITION
+      value: "read:*"
+    - name: IDENTITY_MAPPING_RULES_0_NAME
+      value: "Support Team Mapping"
+    - name: IDENTITY_MAPPING_RULES_0_CLAIM_NAME
+      value: "groups"
+    - name: IDENTITY_MAPPING_RULES_0_CLAIM_VALUE
+      value: "Test-Group"
+    - name: IDENTITY_MAPPING_RULES_0_OPERATOR
+      value: "CONTAINS"
+    - name: IDENTITY_MAPPING_RULES_0_RULE_TYPE
+      value: "ROLE"
+    - name: IDENTITY_MAPPING_RULES_0_APPLIED_ROLE_NAMES_0
+      value: "support-role"
+    - name: IDENTITY_MAPPING_RULES_0_APPLIED_ROLE_NAMES_1
+      value: "Operate"
+
+# -----------------------------------------------------------------------------
+# Identity Postgres (chart deploys its own postgres for Identity)
+# -----------------------------------------------------------------------------
+identityPostgresql:
+  enabled: true
+  auth:
+    existingSecret: static-secret
+    secretKeys:
+      adminPasswordKey: "identity-postgres-password"
+      userPasswordKey: "identity-password"
+
+# Bundled Keycloak is disabled — we're using EntraID for auth
+identityKeycloak:
+  enabled: false
+
+# -----------------------------------------------------------------------------
+# Zeebe Gateway
+# -----------------------------------------------------------------------------
+zeebeGateway:
+  ingress:
+    grpc:
+      enabled: true
+      className: nginx
+      host: "normunda.de"
+      tls:
+        enabled: true
+        secretName: "tls-secret"
+      annotations:
+        cert-manager.io/cluster-issuer: "letsencrypt-prod"
+        ingress.kubernetes.io/rewrite-target: "/"
+        nginx.ingress.kubernetes.io/ssl-redirect: "false"
+        nginx.ingress.kubernetes.io/backend-protocol: "GRPC"
+        nginx.ingress.kubernetes.io/proxy-buffer-size: "128k"
+    rest:
+      enabled: true
+      path: "/zeebe"
+      host: "normunda.de"
+      tls:
+        enabled: true
+        secretName: "tls-secret"
+  contextPath: "/zeebe"
+  replicas: 1
+  resources:
+    requests:
+      memory: "512Mi"
+      cpu: "250m"
+    limits:
+      memory: "2048Mi"
+      cpu: "1000m"
+
+# -----------------------------------------------------------------------------
+# Zeebe broker
+# -----------------------------------------------------------------------------
+zeebe:
+  annotations:
+    metrics.dynatrace.com/scrape: 'true'
+    metrics.dynatrace.com/path: 'metrics/prometheus'
+  clusterSize: 3
+  partitionCount: 3
+  replicationFactor: 3
+  pvcSize: 10Gi
+  resources:
+    requests:
+      cpu: "100m"
+      memory: "512M"
+    limits:
+      cpu: "512m"
+      memory: "2Gi"
+
+# -----------------------------------------------------------------------------
+# Web Modeler
+# -----------------------------------------------------------------------------
+webModeler:
+  enabled: true
+  contextPath: "/modeler"
+  restapi:
+    mail:
+      smtpHost: smtp.example.com
+      smtpPort: 587
+      smtpUser: user
+      existingSecret: static-secret
+      existingSecretPasswordKey: "smtp-password"
+      fromAddress: no-reply@example.com
+
+# -----------------------------------------------------------------------------
+# Web Modeler Postgres (root-level postgresql sub-chart)
+# -----------------------------------------------------------------------------
+postgresql:
+  enabled: true
+  auth:
+    existingSecret: static-secret
+    secretKeys:
+      adminPasswordKey: "modeler-postgres-password"
+      userPasswordKey: "modeler-password"
+
+# -----------------------------------------------------------------------------
+# Elasticsearch (single node for dev/test)
+# -----------------------------------------------------------------------------
+elasticsearch:
+  master:
+    replicaCount: 1
+
+prometheusServiceMonitor:
+  enabled: false
