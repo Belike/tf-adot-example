@@ -2,7 +2,7 @@
 
 Operator reference for the Camunda 8.7 CloudWatch dashboard. For each section: what the panels mean, what abnormal looks like, first-line pointers, and the trigger to escalate to Camunda support.
 
-> **Scope note.** The downstream search store is **OpenSearch** and is monitored on its own dashboard. This runbook covers the Camunda side of the exporter only (events leaving Zeebe). Cluster health, ingest performance, and disk pressure for OpenSearch must be observed separately — most exporter-side symptoms originate there.
+> **Scope note.** The downstream search store is **OpenSearch**. Zeebe-side exporter symptoms (flush latency, failed flushes, bulk memory) are covered in §7 of this runbook. OpenSearch *cluster* health — node count, ingest performance, disk pressure — is on a separate OpenSearch dashboard and must be observed there; most exporter-side symptoms originate downstream.
 
 ## How to read this dashboard
 
@@ -18,15 +18,15 @@ Operator reference for the Camunda 8.7 CloudWatch dashboard. For each section: w
 
 ## 1. General Overview
 
-| Panel | Shows                                                                                                          | Concerning |
-|---|----------------------------------------------------------------------------------------------------------------|---|
-| Partition health (min) | Min `zeebe_health` across partitions. 0=healthy, 1=unhealthy, but operational, 2=dead.                         | ≥1 sustained >1 min |
-| Banned instances | Process instances Zeebe gave up on after repeated failures.                                                    | Any growth |
-| Pending incidents | Instances stuck on a failure waiting for an operator. This is a business impact issue and often not technical. | Growing |
+| Panel | Shows                                                                                                          | Concerning                       |
+|---|----------------------------------------------------------------------------------------------------------------|----------------------------------|
+| Partition health (min) | Min `zeebe_health` across partitions. 1=healthy, 0=unhealthy                                                   | 0 for longer time                |
+| Banned instances | Process instances Zeebe gave up on after repeated failures.                                                    | Any growth                       |
+| Pending incidents | Instances stuck on a failure waiting for an operator. This is a business impact issue and often not technical. | Growing                          |
 | Cluster change status | State of a topology change (add/remove broker, rebalance).                                                     | FAILED, or IN_PROGRESS for hours |
-| Stream processor records / min | Cluster RPM per partition.                                                                                     | One partition flatlines |
-| Exported events / min | Exporter throughput per partition; should track records.                                                       | Drops while ingestion continues |
-| Records appended / min | Log appender writes per partition; should track records.                                                       | Drops with ingestion running |
+| Stream processor records / min | Cluster RPM per partition.                                                                                     | One partition flatlines          |
+| Exported events / min | Exporter throughput per partition; should track records.                                                       | Drops while ingestion continues  |
+| Records appended / min | Log appender writes per partition; should track records.                                                       | Drops with ingestion running     |
 
 **Pointers**
 - A flatlined partition → its leader is restarting, OOMing, or has lost leadership.
@@ -41,6 +41,8 @@ Operator reference for the Camunda 8.7 CloudWatch dashboard. For each section: w
 ## 2. Backpressure & Stream Processor Latency
 
 Zeebe's overload defense: the gateway rejects new requests rather than letting queues grow unbounded. This can be seen as a DoS prevention mechanism for process execution.
+
+> **8.7 note.** 8.7 exposes `zeebe_backpressure_requests_limit` (gauge) and the stream-processor latency histogram.
 
 | Panel | Shows | Concerning |
 |---|---|---|
@@ -128,7 +130,26 @@ Periodic log compaction. Bounds disk usage and lets new followers catch up quick
 
 ---
 
-## 7. Gateway, gRPC & REST API
+## 7. Exporter — OpenSearch
+
+Zeebe-side view of the OpenSearch exporter. Cluster-side problems on OpenSearch surface here first as flush slowness or failures, with bulk memory backing up.
+
+| Panel | Shows | Concerning |
+|---|---|---|
+| OS exporter flush duration max | Time to flush a bulk to OpenSearch, per partition. | Sustained seconds = OS slow or back-pressured |
+| OS exporter failed flushes / min | Bulk flush failures. Annotated at 1/min. | Any sustained non-zero |
+| OS exporter bulk memory | Bytes buffered in pending bulks, per partition. | Continuously climbing = OS not draining |
+
+**Pointers**
+- Failed flushes > 0 → OpenSearch is unhealthy or rejecting writes; jump to the OpenSearch dashboard.
+- Flush duration climbing with bulk memory climbing → OS ingest is the bottleneck; exported position (§3) will lag next.
+- Bulk memory at zero and no flushes → exporter is idle (no records to export) or stuck; cross-check §3 last exported position.
+
+**Escalate** if failed flushes persist after OpenSearch is confirmed healthy, or bulk memory grows unbounded with no OS-side cause.
+
+---
+
+## 8. Gateway, gRPC & REST API
 
 Client-facing surface. Workers and connectors connect here:
 
@@ -145,13 +166,13 @@ Client-facing surface. Workers and connectors connect here:
 | Job stream pushes / min      | Jobs pushed to streaming workers. | Zero while jobs are created = streaming broken, workers fall back to polling |
 
 **Pointers**
-- Gateway latency high, broker latency normal → gateway pod is the bottleneck; check its CPU/JVM (§8).
+- Gateway latency high, broker latency normal → gateway pod is the bottleneck; check its CPU/JVM (§9).
 
 **Escalate** if gateway latency stays high after brokers are confirmed healthy, or if job streaming stops entirely.
 
 ---
 
-## 8. Memory & JVM (per Component)
+## 9. Memory & JVM (per Component)
 
 | Panel | Shows | Concerning |
 |---|---|---|
@@ -171,7 +192,7 @@ Client-facing surface. Workers and connectors connect here:
 
 ---
 
-## 9. CPU & File Descriptors (per Component)
+## 10. CPU & File Descriptors (per Component)
 
 | Panel | Shows | Concerning |
 |---|---|---|
@@ -188,7 +209,7 @@ Client-facing surface. Workers and connectors connect here:
 
 ---
 
-## 10. Aggregate Health (cluster-wide)
+## 11. Aggregate Health (cluster-wide)
 
 Two cluster totals as an at-a-glance "is anything moving?" check.
 

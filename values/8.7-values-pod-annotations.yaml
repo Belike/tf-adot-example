@@ -238,4 +238,4 @@ elasticsearch:
 # Keep ServiceMonitors disabled to avoid double-collection if Prometheus is
 # also installed.
 prometheusServiceMonitor:
-  enabled: false
+  enabled: true
