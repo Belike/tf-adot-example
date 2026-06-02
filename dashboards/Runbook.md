@@ -24,15 +24,15 @@ Operator reference for the Camunda 8.7 CloudWatch dashboard. For each section: w
 | Banned instances | Process instances Zeebe gave up on after repeated failures.                                                    | Any growth                       |
 | Pending incidents | Instances stuck on a failure waiting for an operator. This is a business impact issue and often not technical. | Growing                          |
 | Cluster change status | State of a topology change (add/remove broker, rebalance).                                                     | FAILED, or IN_PROGRESS for hours |
-| Stream processor records / min | Cluster RPM per partition.                                                                                     | One partition flatlines          |
-| Exported events / min | Exporter throughput per partition; should track records.                                                       | Drops while ingestion continues  |
+| Stream processor records (avg, per partition) | Avg of cumulative `zeebe_stream_processor_records_total` over 60 s per partition. Should grow monotonically; flatten = no processing. | One partition flatlines          |
+| Exported events (avg, per partition) | Avg of cumulative `zeebe_exporter_events_total` over 60 s per partition. Should grow monotonically and track records. | Flatlines, or growth diverges downward from records |
 | Records appended / min | Log appender writes per partition; should track records.                                                       | Drops with ingestion running     |
 
 **Pointers**
 - A flatlined partition → its leader is restarting, OOMing, or has lost leadership.
 - Growing banned instances → an application-side issue is producing repeat failures; find the process in Operate.
 - Pending growing without banned growing → engine is fine; surface to the workflow's business owner.
-- Exported events dropping while records keep flowing → check the OpenSearch dashboard first; the exporter side here will only show *symptoms*.
+- Exported events flatlining while records keep growing → check the OpenSearch dashboard first; the exporter side here will only show *symptoms*.
 
 **Escalate** if `zeebe_health` stays at 2 on any partition >5 min, cluster change reads FAILED, or banned instances jump by hundreds in one window with no obvious cause.
 
@@ -160,7 +160,7 @@ Client-facing surface. Workers and connectors connect here:
 | gRPC responses sent / min    | Outbound; should mirror received. | Divergence = gateway can't respond                                           |
 | Gateway request latency max  | Slowest gateway request. | Multi-second sustained                                                       |
 | gRPC processing duration max | Slowest gRPC handler. | Multi-second sustained                                                       |
-| HTTP requests / min          | Combined rate for Operate/Tasklist/Optimize/Identity/Connectors. | Sudden drop = Check health of components                                     |
+| HTTP active requests (sum/60s) | Sum of `http_server_requests_active_seconds_gcount` across Operate/Tasklist/Optimize/Identity/Connectors. Reflects in-flight HTTP requests. | Sudden drop = Check health of components                                     |
 | Job stream - clients         | Workers holding job-stream connections. | Drop = workers disconnecting                                                 |
 | Job stream - servers         | Broker-side endpoints serving job streams. | Drop = gateway lost a broker connection                                      |
 | Job stream pushes / min      | Jobs pushed to streaming workers. | Zero while jobs are created = streaming broken, workers fall back to polling |
@@ -215,14 +215,14 @@ Two cluster totals as an at-a-glance "is anything moving?" check.
 
 | Panel | Shows | Concerning |
 |---|---|---|
-| Stream processor records / min (cluster total) | Sum across partitions. | Drops while client traffic steady |
-| Exporter events / min (cluster total) | Sum across partitions. | Diverges downward from records-total |
+| Stream processor records (avg, cluster total) | Avg of cumulative `zeebe_stream_processor_records_total` across partitions over 60 s. Should grow monotonically. | Flatlines while client traffic is steady |
+| Exporter events (avg, cluster total) | Avg of cumulative `zeebe_exporter_events_total` across partitions over 60 s. Should grow monotonically and track records. | Growth diverges downward from records-total |
 
 **Pointers**
-- Records drop → at least one partition is stuck; go to §1 and §3.
-- Exporter lags records → check the OpenSearch dashboard (downstream ingest is the most common cause).
+- Records line flattens → at least one partition is stuck; go to §1 and §3.
+- Exporter line falls behind records → check the OpenSearch dashboard (downstream ingest is the most common cause).
 
-**Escalate** if both lines stay near zero for an extended period with no deploy or expected lull in traffic.
+**Escalate** if both lines stop growing for an extended period with no deploy or expected lull in traffic.
 
 ---
 

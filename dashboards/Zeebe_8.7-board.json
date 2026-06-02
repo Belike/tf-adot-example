@@ -137,13 +137,13 @@
       "width": 8,
       "height": 6,
       "properties": {
-        "title": "Stream processor records / min (per partition)",
+        "title": "Stream processor records (avg, per partition)",
         "view": "timeSeries",
         "stacked": false,
         "metrics": [
           [
             {
-              "expression": "RATE(SEARCH('{ContainerInsights/Prometheus,Namespace,Service,partition} MetricName=\"zeebe_stream_processor_records_total\" Namespace=\"camunda\" Service=\"camunda-platform\"', 'Sum', 60))*60",
+              "expression": "SEARCH('{ContainerInsights/Prometheus,Namespace,Service,partition} MetricName=\"zeebe_stream_processor_records_total\" Namespace=\"camunda\" Service=\"camunda-platform\"', 'Average', 60)",
               "id": "e1"
             }
           ]
@@ -152,7 +152,7 @@
         "yAxis": {
           "left": {
             "min": 0,
-            "label": "records/min"
+            "label": "records"
           }
         }
       }
@@ -164,13 +164,13 @@
       "width": 8,
       "height": 6,
       "properties": {
-        "title": "Exported events / min (per partition)",
+        "title": "Exported events (avg, per partition)",
         "view": "timeSeries",
         "stacked": false,
         "metrics": [
           [
             {
-              "expression": "RATE(SEARCH('{ContainerInsights/Prometheus,Namespace,Service,partition} MetricName=\"zeebe_exporter_events_total\" Namespace=\"camunda\" Service=\"camunda-platform\"', 'Sum', 60))*60",
+              "expression": "SEARCH('{ContainerInsights/Prometheus,Namespace,Service,partition} MetricName=\"zeebe_exporter_events_total\" Namespace=\"camunda\" Service=\"camunda-platform\"', 'Average', 60)",
               "id": "e1"
             }
           ]
@@ -179,7 +179,7 @@
         "yAxis": {
           "left": {
             "min": 0,
-            "label": "events/min"
+            "label": "events"
           }
         }
       }
@@ -1063,15 +1063,15 @@
       "width": 8,
       "height": 6,
       "properties": {
-        "title": "HTTP requests / min (cluster, all webapps)",
+        "title": "HTTP active requests (sum/60s, cluster)",
         "view": "timeSeries",
         "stacked": false,
         "metrics": [
           [
             {
-              "expression": "RATE(SEARCH('{ContainerInsights/Prometheus,Namespace,Service} MetricName=\"http_server_requests_seconds_count\" Namespace=\"camunda\" Service=\"camunda-platform\"', 'Sum', 60))*60",
+              "expression": "SEARCH('{ContainerInsights/Prometheus,Namespace,Service} MetricName=\"http_server_requests_active_seconds_gcount\" Namespace=\"camunda\" Service=\"camunda-platform\"', 'Sum', 60)",
               "id": "e1",
-              "label": "HTTP/min"
+              "label": "Active HTTP"
             }
           ]
         ],
@@ -1433,15 +1433,15 @@
       "width": 12,
       "height": 6,
       "properties": {
-        "title": "Stream processor records / min (cluster total)",
+        "title": "Stream processor records (avg, cluster total)",
         "view": "timeSeries",
         "stacked": false,
         "metrics": [
           [
             {
-              "expression": "RATE(SEARCH('{ContainerInsights/Prometheus,Namespace,Service} MetricName=\"zeebe_stream_processor_records_total\" Namespace=\"camunda\" Service=\"camunda-platform\"', 'Sum', 60))*60",
+              "expression": "SEARCH('{ContainerInsights/Prometheus,Namespace,Service} MetricName=\"zeebe_stream_processor_records_total\" Namespace=\"camunda\" Service=\"camunda-platform\"', 'Average', 60)",
               "id": "e1",
-              "label": "Records/min"
+              "label": "Records"
             }
           ]
         ],
@@ -1455,15 +1455,15 @@
       "width": 12,
       "height": 6,
       "properties": {
-        "title": "Exporter events / min (cluster total)",
+        "title": "Exporter events (avg, cluster total)",
         "view": "timeSeries",
         "stacked": false,
         "metrics": [
           [
             {
-              "expression": "RATE(SEARCH('{ContainerInsights/Prometheus,Namespace,Service} MetricName=\"zeebe_exporter_events_total\" Namespace=\"camunda\" Service=\"camunda-platform\"', 'Sum', 60))*60",
+              "expression": "SEARCH('{ContainerInsights/Prometheus,Namespace,Service} MetricName=\"zeebe_exporter_events_total\" Namespace=\"camunda\" Service=\"camunda-platform\"', 'Average', 60)",
               "id": "e1",
-              "label": "Events/min"
+              "label": "Events"
             }
           ]
         ],

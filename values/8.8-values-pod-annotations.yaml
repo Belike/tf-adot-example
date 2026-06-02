@@ -1,26 +1,7 @@
-# =============================================================================
-# Camunda 8.7 — Helm values with Prometheus pod annotations for ADOT scraping
-#
-# Mirrors the 8.8 file in this repo, but adapted for the 8.7 chart layout:
-#
-#   * No `orchestration` umbrella — Zeebe, Zeebe Gateway, Operate, Tasklist
-#     are separate top-level subcharts (this is the pre-8.8 structure).
-#   * No `global.compatibility.orchestration` flag (8.8-only).
-#   * gRPC ingress lives under `zeebe-gateway.ingress`, not under
-#     `orchestration.ingress.grpc`.
-#   * Identity auth has per-component redirectUrls (operate, tasklist,
-#     optimize, webModeler), not a single `orchestration` redirect.
-#   * Pod annotation paths are plain `/actuator/prometheus` — there is no
-#     orchestration context-path prefix in 8.7.
-#   * Service label values that the ADOT collector will see (Service):
-#       zeebe, zeebe-gateway, operate, tasklist, optimize,
-#       identity, connectors, web-modeler
-#     (vs. `camunda-platform` for the unified orchestration pod in 8.8)
-#
-# Tested chart line: camunda/camunda-platform 12.x (Camunda 8.7).
-# =============================================================================
-
 global:
+  compatibility:
+    orchestration:
+      enabled: true
   ingress:
     enabled: true
     className: nginx
@@ -32,168 +13,68 @@ global:
       cert-manager.io/cluster-issuer: "letsencrypt-prod"
       nginx.ingress.kubernetes.io/ssl-redirect: "true"
       nginx.ingress.kubernetes.io/proxy-body-size: "20m"
-
   identity:
     auth:
       enabled: true
       publicIssuerUrl: "https://normunda.de/auth/realms/camunda-platform"
-      # 8.7 has per-component redirect URLs (no unified orchestration block).
-      # Each component's OIDC client secret is loaded from camunda-credentials
-      # using existingSecret.name + existingSecret.existingSecretKey. Without
-      # an explicit existingSecretKey the chart falls back to its default key
-      # (e.g. `operate-secret`), which would not match this secret's naming.
-      # The legacy `existingSecret: <plain-string>` form treats the value as
-      # the literal client-secret and exposes it in Identity's configmap, so
-      # avoid it.
-      operate:
-        redirectUrl: "https://normunda.de/operate"
-        existingSecret:
-          name: "camunda-credentials"
-        existingSecretKey: "identity-operate-client-token"
-      tasklist:
-        redirectUrl: "https://normunda.de/tasklist"
-        existingSecret:
-          name: "camunda-credentials"
-        existingSecretKey: "identity-tasklist-client-token"
+      admin:
+        enabled: true
+        secret:
+          existingSecret: "camunda-credentials"
+          existingSecretKey: "identity-admin-client-token"
       optimize:
+        secret:
+          existingSecret: "camunda-credentials"
+          existingSecretKey: "identity-optimize-client-token"
         redirectUrl: "https://normunda.de/optimize"
-        existingSecret:
-          name: "camunda-credentials"
-        existingSecretKey: "identity-optimize-client-token"
       webModeler:
         redirectUrl: "https://normunda.de/modeler"
-        existingSecret:
-          name: "camunda-credentials"
-        existingSecretKey: "identity-webmodeler-client-token"
-      connectors:
-        existingSecret:
-          name: "camunda-credentials"
-        existingSecretKey: "identity-connectors-client-token"
-      zeebe:
-        existingSecret:
-          name: "camunda-credentials"
-        existingSecretKey: "identity-zeebe-client-token"
+      identity:
+        redirectUrl: "https://normunda.de/identity"
+  security:
+    authentication:
+      method: oidc
 
-# -----------------------------------------------------------------------------
-# Zeebe broker (StatefulSet)
-# Pod label app.kubernetes.io/name=zeebe -> Service="zeebe" in CloudWatch
-# Management port 9600 exposes /actuator/prometheus
-# -----------------------------------------------------------------------------
-zeebe:
-  enabled: true
-  clusterSize: "3"
-  partitionCount: "3"
-  replicationFactor: "3"
-  pvcSize: 10Gi
-  podAnnotations:
-    prometheus.io/scrape: "true"
-    prometheus.io/port: "9600"
-    prometheus.io/path: "/actuator/prometheus"
-  env:
-    # Enable per-process/job execution metrics (off by default)
-    - name: ZEEBE_BROKER_EXECUTION_METRICS_EXPORTER_ENABLED
-      value: "true"
-
-# -----------------------------------------------------------------------------
-# Zeebe Gateway (Deployment)
-# Pod label app.kubernetes.io/name=zeebe-gateway -> Service="zeebe-gateway"
-# Owns the gRPC ingress in 8.7 (moved into orchestration.ingress.grpc in 8.8)
-# -----------------------------------------------------------------------------
-zeebe-gateway:
-  enabled: true
-  replicas: 2
-  podAnnotations:
-    prometheus.io/scrape: "true"
-    prometheus.io/port: "9600"
-    prometheus.io/path: "/actuator/prometheus"
-  ingress:
-    enabled: true
-    className: nginx
-    host: "grpc.normunda.de"
-    tls:
-      enabled: true
-      secretName: "tls-grpc-secret"
-    annotations:
-      cert-manager.io/cluster-issuer: "letsencrypt-prod"
-      ingress.kubernetes.io/rewrite-target: "/"
-      nginx.ingress.kubernetes.io/ssl-redirect: "false"
-      nginx.ingress.kubernetes.io/backend-protocol: "GRPC"
-      nginx.ingress.kubernetes.io/proxy-buffer-size: "128k"
-
-# -----------------------------------------------------------------------------
-# Operate
-# Pod label app.kubernetes.io/name=operate -> Service="operate"
-# Management port 9600 (separate from app port 80)
-# -----------------------------------------------------------------------------
-operate:
-  enabled: true
-  contextPath: "/operate"
-  podAnnotations:
-    prometheus.io/scrape: "true"
-    prometheus.io/port: "9600"
-    prometheus.io/path: "/actuator/prometheus"
-
-# -----------------------------------------------------------------------------
-# Tasklist
-# Pod label app.kubernetes.io/name=tasklist -> Service="tasklist"
-# -----------------------------------------------------------------------------
-tasklist:
-  enabled: true
-  contextPath: "/tasklist"
-  podAnnotations:
-    prometheus.io/scrape: "true"
-    prometheus.io/port: "9600"
-    prometheus.io/path: "/actuator/prometheus"
-
-# -----------------------------------------------------------------------------
-# Optimize
-# Pod label app.kubernetes.io/name=optimize -> Service="optimize"
-# Optimize exposes its actuator on its own management port (8092 by default)
-# -----------------------------------------------------------------------------
 optimize:
   enabled: true
   contextPath: "/optimize"
   podAnnotations:
     prometheus.io/scrape: "true"
     prometheus.io/port: "8092"
-    prometheus.io/path: "/actuator/prometheus"
+    prometheus.io/path: "/optimize/actuator/prometheus"
 
-# -----------------------------------------------------------------------------
-# Connectors (out-of-the-box connector runtime)
-# Pod label app.kubernetes.io/name=connectors -> Service="connectors"
-# Connectors actuator runs on the same port as the app: 8080
-# -----------------------------------------------------------------------------
 connectors:
   enabled: true
   contextPath: "/connectors"
   podAnnotations:
     prometheus.io/scrape: "true"
     prometheus.io/port: "8080"
-    prometheus.io/path: "/actuator/prometheus"
+    prometheus.io/path: "/connectors/actuator/prometheus"
+  security:
+    authentication:
+      method: oidc
+      oidc:
+        secret:
+          existingSecret: "camunda-credentials"
+          existingSecretKey: "identity-connectors-client-token"
 
-# -----------------------------------------------------------------------------
-# Identity
-# Pod label app.kubernetes.io/name=identity -> Service="identity"
-# 8.7 Identity exposes its actuator on management port 8082
-# -----------------------------------------------------------------------------
 identity:
   enabled: true
   contextPath: "/identity"
   fullURL: "https://normunda.de/identity"
-  firstUser:
-    existingSecret: "camunda-credentials"
   podAnnotations:
     prometheus.io/scrape: "true"
-    prometheus.io/port: "8082"
-    prometheus.io/path: "/actuator/prometheus"
+    prometheus.io/port: "82"
+    prometheus.io/path: "/identity/actuator/prometheus"
+  firstUser:
+    secret:
+      existingSecret: "camunda-credentials"
+      existingSecretKey: "identity-firstuser-password"
 
 identityPostgresql:
   enabled: true
   auth:
     existingSecret: camunda-credentials
-    secretKeys:
-      adminPasswordKey: "identity-postgresql-admin-password"
-      userPasswordKey: "identity-postgresql-user-password"
 
 identityKeycloak:
   enabled: true
@@ -203,15 +84,56 @@ identityKeycloak:
   postgresql:
     auth:
       existingSecret: camunda-credentials
-      secretKeys:
-        adminPasswordKey: "identity-keycloak-postgresql-admin-password"
-        userPasswordKey: "identity-keycloak-postgresql-user-password"
 
-# -----------------------------------------------------------------------------
-# Web Modeler
-# Pod label app.kubernetes.io/name=web-modeler -> Service="web-modeler"
-# REST-API exposes Micrometer at :8091/metrics (note: NOT /actuator/prometheus)
-# -----------------------------------------------------------------------------
+orchestration:
+  enabled: true
+  profiles:
+    broker: true
+    identity: true
+    operate: true
+    tasklist: true
+  podAnnotations:
+    prometheus.io/scrape: "true"
+    prometheus.io/port: "9600"
+    prometheus.io/path: "/orchestration/actuator/prometheus"
+
+  security:
+    authorizations:
+      enabled: true
+    authentication:
+      method: oidc
+      oidc:
+        secret:
+          existingSecret: "camunda-credentials"
+          existingSecretKey: "identity-orchestration-client-token"
+        redirectUrl: "https://normunda.de/orchestration"
+        backwardsCompatibleAudiences:
+          - zeebe-api
+        groupsClaim: "groups"
+
+  ingress:
+    grpc:
+      enabled: true
+      className: nginx
+      host: "grpc.normunda.de"
+      tls:
+        enabled: true
+        secretName: "tls-grpc-secret"
+      annotations:
+        cert-manager.io/cluster-issuer: "letsencrypt-prod"
+        ingress.kubernetes.io/rewrite-target: "/"
+        nginx.ingress.kubernetes.io/ssl-redirect: "false"
+        nginx.ingress.kubernetes.io/backend-protocol: "GRPC"
+        nginx.ingress.kubernetes.io/proxy-buffer-size: "128k"
+  contextPath: "/orchestration"
+  clusterSize: "3"
+  partitionCount: "9"
+  replicationFactor: "3"
+  pvcSize: 10Gi
+  env:
+    - name: ZEEBE_BROKER_EXECUTION_METRICS_EXPORTER_ENABLED
+      value: "true"
+
 webModeler:
   enabled: true
   contextPath: "/modeler"
@@ -219,7 +141,7 @@ webModeler:
     podAnnotations:
       prometheus.io/scrape: "true"
       prometheus.io/port: "8091"
-      prometheus.io/path: "/metrics"
+      prometheus.io/path: "/modeler/metrics"
     mail:
       smtpHost: smtp.example.com
       smtpPort: 587
@@ -235,16 +157,10 @@ webModelerPostgresql:
       adminPasswordKey: "webmodeler-postgresql-admin-password"
       userPasswordKey: "webmodeler-postgresql-user-password"
 
-# -----------------------------------------------------------------------------
-# Elasticsearch (single master for non-prod sizing)
-# -----------------------------------------------------------------------------
 elasticsearch:
   enabled: true
   master:
     replicaCount: 1
 
-# We rely on pod-annotation scraping via the ADOT collector (CloudWatch path).
-# Keep ServiceMonitors disabled to avoid double-collection if Prometheus is
-# also installed.
 prometheusServiceMonitor:
-  enabled: false
+  enabled: true
